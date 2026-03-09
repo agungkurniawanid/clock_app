@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,11 +12,33 @@ import 'task_detail_screen.dart';
 import 'alarm_screen.dart';
 import 'signup_screen.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  Timer? _countdownTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Refresh setiap menit agar countdown tetap akurat
+    _countdownTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final tasks = ref.watch(taskListProvider);
     final summary = ref.watch(taskSummaryProvider);
@@ -48,10 +71,8 @@ class HomeScreen extends ConsumerWidget {
                         _buildClockCard(context, isDark),
                         // Summary Grid
                         _buildSummaryGrid(context, summary, ref),
-                        const SizedBox(height: 20),
-                        // Alarm Banner
+                        // Alarm Banner — hanya muncul jika ada task dengan alarmMusic
                         _buildAlarmBanner(context, ref, tasks),
-                        const SizedBox(height: 24),
                         // Today's Schedule
                         SectionHeader(
                           title: "Today's Schedule",
@@ -389,72 +410,108 @@ class HomeScreen extends ConsumerWidget {
 
   Widget _buildAlarmBanner(
       BuildContext context, WidgetRef ref, List<TaskModel> tasks) {
-    if (tasks.isEmpty) return const SizedBox.shrink();
+    final now = DateTime.now();
 
-    final nextTask = tasks.firstWhere(
-      (t) => t.status == TaskStatus.todo,
-      orElse: () => tasks.first,
-    );
+    // Hanya tampilkan task yang menggunakan alarmMusic (bukan notificationOnly),
+    // belum selesai, dan waktu alarmnya masih di masa depan.
+    final alarmTasks = tasks.where((t) {
+      if (t.status == TaskStatus.completed) return false;
+      if (t.alarmMode != AlarmMode.alarmMusic) return false;
+      final alarmDt = DateTime(
+          t.date.year, t.date.month, t.date.day, t.time.hour, t.time.minute);
+      return alarmDt.isAfter(now);
+    }).toList();
 
-    return GestureDetector(
-      onTap: () {
-        ref.read(activeAlarmTaskIdProvider.notifier).state = nextTask.id;
-        ref.read(alarmActiveProvider.notifier).state = true;
-        Navigator.push(
-            context, MaterialPageRoute(builder: (_) => const AlarmScreen()));
-      },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Theme.of(context).colorScheme.primary,
-              Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color:
-                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            _PulseIndicator(),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '🔔 Next Alarm in 2h 15m',
-                    style: GoogleFonts.nunito(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '"${nextTask.title}" • ${nextTask.timeLabel}',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+    // Jika tidak ada alarm task, hanya beri spacing minimal
+    if (alarmTasks.isEmpty) return const SizedBox(height: 20);
+
+    // Urutkan berdasarkan waktu terdekat
+    alarmTasks.sort((a, b) {
+      final aDt = DateTime(
+          a.date.year, a.date.month, a.date.day, a.time.hour, a.time.minute);
+      final bDt = DateTime(
+          b.date.year, b.date.month, b.date.day, b.time.hour, b.time.minute);
+      return aDt.compareTo(bDt);
+    });
+
+    final nextTask = alarmTasks.first;
+    final alarmDt = DateTime(nextTask.date.year, nextTask.date.month,
+        nextTask.date.day, nextTask.time.hour, nextTask.time.minute);
+    final diff = alarmDt.difference(now);
+
+    final hours = diff.inHours;
+    final minutes = diff.inMinutes.remainder(60);
+    final countdownLabel = hours > 0
+        ? 'Next Alarm in ${hours}h ${minutes}m'
+        : 'Next Alarm in ${minutes}m';
+
+    return Column(
+      children: [
+        const SizedBox(height: 20),
+        GestureDetector(
+          onTap: () {
+            ref.read(activeAlarmTaskIdProvider.notifier).state = nextTask.id;
+            ref.read(alarmActiveProvider.notifier).state = true;
+            Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const AlarmScreen()));
+          },
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Theme.of(context).colorScheme.primary,
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
                 ],
               ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.3),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-            Icon(Icons.arrow_forward_ios_rounded,
-                color: Colors.white.withValues(alpha: 0.7), size: 16),
-          ],
+            child: Row(
+              children: [
+                _PulseIndicator(),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '🔔 $countdownLabel',
+                        style: GoogleFonts.nunito(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '"${nextTask.title}" • ${nextTask.timeLabel}',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.8),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.arrow_forward_ios_rounded,
+                    color: Colors.white.withValues(alpha: 0.7), size: 16),
+              ],
+            ),
+          ),
         ),
-      ),
+        const SizedBox(height: 24),
+      ],
     );
   }
 }

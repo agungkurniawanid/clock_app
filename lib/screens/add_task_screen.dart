@@ -6,6 +6,7 @@ import '../providers/app_providers.dart';
 import '../data/dummy_data.dart';
 import '../theme/app_colors.dart';
 import '../services/audio_service.dart';
+import '../utils/app_toast.dart';
 import 'login_screen.dart';
 
 const _months = [
@@ -44,6 +45,18 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
   int _customEndAfterCount = 1;
   final List<bool> _customWeekDays = List.filled(7, false);
 
+  // ── Checklist & Sub-task local state ──────────────────────────────────────
+  List<ChecklistItem> _checklist = [];
+  List<SubTask> _subTasks = [];
+  final Map<String, TextEditingController> _controllers = {};
+
+  // ── Get or create a TextEditingController keyed by item ID ────────────────
+  TextEditingController _ctrl(String id, [String initial = '']) =>
+      _controllers.putIfAbsent(id, () => TextEditingController(text: initial));
+
+  // ── Unique ID generator ───────────────────────────────────────────────────
+  String _uid() => DateTime.now().microsecondsSinceEpoch.toString();
+
   @override
   void initState() {
     super.initState();
@@ -51,6 +64,8 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
       final t = widget.editTask!;
       _titleCtrl.text = t.title;
       _descCtrl.text = t.description;
+      _checklist = List.from(t.checklist);
+      _subTasks = List.from(t.subTasks);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final n = ref.read(addTaskFormProvider.notifier);
         n.setTitle(t.title);
@@ -90,6 +105,9 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
   void dispose() {
     _titleCtrl.dispose();
     _descCtrl.dispose();
+    for (final c in _controllers.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -131,9 +149,12 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
           _section(context, '⑤ Priority & Color Tag',
               _buildPriorityColor(context, form, card)),
           const SizedBox(height: 16),
+          _section(context, '⑥ Checklist & Sub-tasks',
+              _buildChecklistSubtasks(context, isDark, card)),
+          const SizedBox(height: 16),
           if (widget.editTask != null) ...[
             _section(
-                context, '⑥ Status', _buildStatusSelector(context, form, card)),
+                context, '⑦ Status', _buildStatusSelector(context, form, card)),
             const SizedBox(height: 16),
           ],
           Row(
@@ -403,11 +424,12 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
   void _save() {
     final form = ref.read(addTaskFormProvider);
     if (form.title.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a title')),
-      );
+      AppToast.show(context, 'Please enter a title', type: ToastType.error);
       return;
     }
+    // Sync text controllers into data before saving
+    final syncedChecklist = _syncChecklistCtrls(_checklist);
+    final syncedSubTasks = _syncSubTasksCtrls(_subTasks);
     final newTask = TaskModel(
       id: widget.editTask?.id ??
           DateTime.now().millisecondsSinceEpoch.toString(),
@@ -447,19 +469,20 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
       reminders: form.reminders,
       colorTag: form.colorTag,
       history: widget.editTask?.history ?? [],
+      checklist: syncedChecklist,
+      subTasks: syncedSubTasks,
     );
     if (widget.editTask != null) {
       ref.read(taskListProvider.notifier).updateTask(newTask);
     } else {
       ref.read(taskListProvider.notifier).addTask(newTask);
     }
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(widget.editTask != null
-              ? 'Schedule updated!'
-              : 'Schedule saved!')),
+    AppToast.show(
+      context,
+      widget.editTask != null ? 'Schedule updated!' : 'Schedule saved!',
+      type: ToastType.success,
     );
+    Navigator.pop(context);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -525,6 +548,350 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
   // ─────────────────────────────────────────────────────────────────────────
   // Shared helpers
   // ─────────────────────────────────────────────────────────────────────────
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Checklist & Sub-task helpers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  List<ChecklistItem> _syncChecklistCtrls(List<ChecklistItem> items) => items
+      .map((c) {
+        final t = _controllers[c.id]?.text.trim() ?? c.title;
+        return c.copyWith(title: t);
+      })
+      .where((c) => c.title.isNotEmpty)
+      .toList();
+
+  List<SubTask> _syncSubTasksCtrls(List<SubTask> tasks) => tasks
+      .map((st) {
+        final t = _controllers[st.id]?.text.trim() ?? st.title;
+        return SubTask(
+          id: st.id,
+          title: t,
+          isChecked: st.isChecked,
+          checklist: _syncChecklistCtrls(st.checklist),
+          subTasks: _syncSubTasksCtrls(st.subTasks),
+        );
+      })
+      .where((st) => st.title.isNotEmpty)
+      .toList();
+
+  List<SubTask> _updateSubTaskNode(
+          List<SubTask> tasks, String id, SubTask Function(SubTask) fn) =>
+      tasks
+          .map((t) => t.id == id
+              ? fn(t)
+              : t.copyWith(subTasks: _updateSubTaskNode(t.subTasks, id, fn)))
+          .toList();
+
+  List<SubTask> _removeSubTaskNode(List<SubTask> tasks, String id) => tasks
+      .where((t) => t.id != id)
+      .map((t) => t.copyWith(subTasks: _removeSubTaskNode(t.subTasks, id)))
+      .toList();
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ⑥ Checklist & Sub-tasks UI
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildChecklistSubtasks(
+      BuildContext context, bool isDark, Color card) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final textSecondary = Theme.of(context).textTheme.bodyMedium?.color;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Flat checklist ──────────────────────────────────────────────
+        _clSubHeader(context, Icons.checklist_rounded, 'Checklist'),
+        const SizedBox(height: 6),
+        ..._checklist.asMap().entries.map((e) {
+          final i = e.key;
+          final item = e.value;
+          return _clItemRow(
+            context,
+            isDark,
+            id: item.id,
+            initialText: item.title,
+            hint: 'Checklist item...',
+            onDelete: () {
+              _controllers.remove(item.id);
+              setState(() => _checklist.removeAt(i));
+            },
+          );
+        }),
+        _addItemBtn(context, 'Add Checklist Item', () {
+          setState(() {
+            _checklist.add(ChecklistItem(id: _uid(), title: ''));
+          });
+        }, primary),
+        const SizedBox(height: 16),
+
+        // ── Sub-tasks ───────────────────────────────────────────────────
+        _clSubHeader(context, Icons.account_tree_rounded, 'Sub-tasks'),
+        const SizedBox(height: 6),
+        for (final st in _subTasks)
+          _buildSubTaskNode(context, isDark, st, 0, primary, textSecondary),
+        _addItemBtn(context, 'Add Sub-task', () {
+          setState(() {
+            _subTasks.add(SubTask(id: _uid(), title: ''));
+          });
+        }, primary),
+      ],
+    );
+  }
+
+  Widget _buildSubTaskNode(
+    BuildContext context,
+    bool isDark,
+    SubTask st,
+    int depth,
+    Color primary,
+    Color? textSecondary,
+  ) {
+    final leftPad = depth * 16.0;
+    final card = isDark ? darkCard : lightCard;
+    return Padding(
+      padding: EdgeInsets.only(left: leftPad, bottom: 6),
+      child: Container(
+        decoration: BoxDecoration(
+          color: card,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: primary.withValues(alpha: 0.15), width: 1),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Sub-task title row
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              child: Row(
+                children: [
+                  Icon(Icons.drag_handle_rounded,
+                      size: 16, color: textSecondary),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: TextField(
+                      controller: _ctrl(st.id, st.title),
+                      decoration: const InputDecoration(
+                        hintText: 'Sub-task title...',
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding:
+                            EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                      ),
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.delete_outline_rounded,
+                        size: 18, color: Colors.red.withValues(alpha: 0.7)),
+                    splashRadius: 18,
+                    onPressed: () {
+                      _controllers.remove(st.id);
+                      setState(() {
+                        _subTasks = _removeSubTaskNode(_subTasks, st.id);
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            // Nested checklist
+            if (st.checklist.isNotEmpty || true) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 8, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.checklist_rounded,
+                            size: 13, color: textSecondary),
+                        const SizedBox(width: 6),
+                        Text('Checklist',
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: textSecondary,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    for (int i = 0; i < st.checklist.length; i++)
+                      _clItemRow(
+                        context,
+                        isDark,
+                        id: st.checklist[i].id,
+                        initialText: st.checklist[i].title,
+                        hint: 'Checklist item...',
+                        compact: true,
+                        onDelete: () {
+                          final cid = st.checklist[i].id;
+                          _controllers.remove(cid);
+                          setState(() {
+                            _subTasks = _updateSubTaskNode(
+                                _subTasks,
+                                st.id,
+                                (t) => t.copyWith(
+                                    checklist: t.checklist
+                                        .where((c) => c.id != cid)
+                                        .toList()));
+                          });
+                        },
+                      ),
+                    _addItemBtn(
+                      context,
+                      'Add Checklist Item',
+                      () {
+                        final newItem = ChecklistItem(id: _uid(), title: '');
+                        setState(() {
+                          _subTasks = _updateSubTaskNode(
+                              _subTasks,
+                              st.id,
+                              (t) => t.copyWith(
+                                  checklist: [...t.checklist, newItem]));
+                        });
+                      },
+                      primary,
+                      compact: true,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Nested sub-tasks
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 8, 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.account_tree_rounded,
+                          size: 13, color: textSecondary),
+                      const SizedBox(width: 6),
+                      Text('Sub-tasks',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: textSecondary,
+                              fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  for (final child in st.subTasks)
+                    _buildSubTaskNode(
+                        context, isDark, child, 0, primary, textSecondary),
+                  _addItemBtn(
+                    context,
+                    'Add Sub-task',
+                    () {
+                      final newSt = SubTask(id: _uid(), title: '');
+                      setState(() {
+                        _subTasks = _updateSubTaskNode(
+                            _subTasks,
+                            st.id,
+                            (t) =>
+                                t.copyWith(subTasks: [...t.subTasks, newSt]));
+                      });
+                    },
+                    primary,
+                    compact: true,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _clSubHeader(BuildContext context, IconData icon, String label) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: Theme.of(context).colorScheme.primary),
+        const SizedBox(width: 6),
+        Text(label,
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w700, fontSize: 13)),
+      ],
+    );
+  }
+
+  Widget _clItemRow(
+    BuildContext context,
+    bool isDark, {
+    required String id,
+    required String initialText,
+    required String hint,
+    required VoidCallback onDelete,
+    bool compact = false,
+  }) {
+    final textSecondary = Theme.of(context).textTheme.bodyMedium?.color;
+    return Padding(
+      padding: EdgeInsets.only(bottom: compact ? 4 : 6),
+      child: Row(
+        children: [
+          Icon(Icons.radio_button_unchecked_rounded,
+              size: compact ? 14 : 16, color: textSecondary),
+          const SizedBox(width: 6),
+          Expanded(
+            child: TextField(
+              controller: _ctrl(id, initialText),
+              decoration: InputDecoration(
+                hintText: hint,
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(
+                    vertical: compact ? 6 : 8, horizontal: 0),
+              ),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(fontSize: compact ? 12 : 14),
+            ),
+          ),
+          GestureDetector(
+            onTap: onDelete,
+            child: Icon(Icons.close_rounded,
+                size: compact ? 14 : 16,
+                color: Colors.red.withValues(alpha: 0.6)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _addItemBtn(
+    BuildContext context,
+    String label,
+    VoidCallback onTap,
+    Color primary, {
+    bool compact = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: compact ? 2 : 4),
+        child: Row(
+          children: [
+            Icon(Icons.add_circle_outline_rounded,
+                size: compact ? 13 : 15, color: primary),
+            const SizedBox(width: 6),
+            Text(label,
+                style: TextStyle(
+                    color: primary,
+                    fontSize: compact ? 11 : 13,
+                    fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _section(BuildContext context, String title, Widget content) {
     return Column(

@@ -8,6 +8,7 @@ import '../providers/app_providers.dart';
 import '../services/audio_service.dart';
 import '../services/notification_service.dart';
 import '../theme/app_colors.dart';
+import '../utils/app_toast.dart';
 import 'task_detail_screen.dart';
 
 class AlarmScreen extends ConsumerStatefulWidget {
@@ -70,6 +71,15 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
           ? (task.volume / 100.0).clamp(0.0, 1.0)
           : (defaultVol / 100.0).clamp(0.0, 1.0);
       AudioService.instance.playAsset(file, volume: vol);
+    } else {
+      // notificationOnly mode: play default notification music.
+      final defaultNotifMusic = ref.read(defaultNotifMusicProvider);
+      final defaultNotifVol = ref.read(defaultNotifVolumeProvider);
+      final file = task.musicFile ?? defaultNotifMusic;
+      final vol = task.musicFile != null
+          ? (task.volume / 100.0).clamp(0.0, 1.0)
+          : (defaultNotifVol / 100.0).clamp(0.0, 1.0);
+      AudioService.instance.playAsset(file, volume: vol);
     }
   }
 
@@ -123,11 +133,10 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
     }
     ref.read(alarmActiveProvider.notifier).state = false;
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Alarm snoozed for $minutes minutes'),
-          behavior: SnackBarBehavior.floating,
-        ),
+      AppToast.show(
+        context,
+        'Alarm snoozed for $minutes minutes',
+        type: ToastType.info,
       );
       Navigator.pop(context);
     }
@@ -143,12 +152,15 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
             : tasks.first)
         : null;
 
-    final soundName = task?.alarmMode == AlarmMode.alarmMusic
-        ? AudioService.displayName(task?.musicFile ?? AudioService.defaultAlarm)
-            .replaceAll('_', ' ')
-            .replaceAll(
-                RegExp(r'\.(mp3|m4a|ogg|wav|flac)$', caseSensitive: false), '')
-        : 'Notification only';
+    final defaultMusic = ref.watch(defaultMusicProvider);
+    final defaultNotifMusic = ref.watch(defaultNotifMusicProvider);
+    final soundName = AudioService.displayName(task?.musicFile ??
+            (task?.alarmMode == AlarmMode.alarmMusic
+                ? defaultMusic
+                : defaultNotifMusic))
+        .replaceAll('_', ' ')
+        .replaceAll(
+            RegExp(r'\.(mp3|m4a|ogg|wav|flac)$', caseSensitive: false), '');
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(

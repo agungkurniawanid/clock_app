@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../models/task_model.dart';
 import 'status_badge.dart';
 import 'alarm_mode_icon.dart';
-import 'date_avatar_widget.dart';
 import '../theme/app_colors.dart';
 
 class SwipeableCard extends StatefulWidget {
@@ -10,6 +9,7 @@ class SwipeableCard extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onComplete;
   final VoidCallback? onDelete;
+  final VoidCallback? onEdit;
 
   const SwipeableCard({
     super.key,
@@ -17,6 +17,7 @@ class SwipeableCard extends StatefulWidget {
     this.onTap,
     this.onComplete,
     this.onDelete,
+    this.onEdit,
   });
 
   @override
@@ -115,8 +116,6 @@ class _SwipeableCardState extends State<SwipeableCard> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              DateAvatarWidget(date: task.date),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -159,7 +158,7 @@ class _SwipeableCardState extends State<SwipeableCard> {
                         AlarmModeIcon(mode: task.alarmMode, size: 12),
                         if (task.musicFile != null)
                           _infoChip(context, Icons.music_note_rounded,
-                              task.musicFile!),
+                              task.musicFile!.split(RegExp(r'[/\\]')).last),
                       ],
                     ),
                   ],
@@ -176,6 +175,7 @@ class _SwipeableCardState extends State<SwipeableCard> {
                   const PopupMenuItem(value: 'delete', child: Text('Delete')),
                 ],
                 onSelected: (v) {
+                  if (v == 'edit') widget.onEdit?.call();
                   if (v == 'complete') widget.onComplete?.call();
                   if (v == 'delete') widget.onDelete?.call();
                 },

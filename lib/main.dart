@@ -60,6 +60,8 @@ void main() async {
   NotificationService.dndEnabled = savedDnd;
   NotificationService.defaultAlarmMusic = savedMusic;
   NotificationService.defaultAlarmVolume = savedVolume / 100.0;
+  NotificationService.defaultNotifMusic = savedNotifMusic;
+  NotificationService.defaultNotifVolume = savedNotifVolume / 100.0;
   NotificationService.defaultReminder = savedRemind;
 
   // Init notification service
@@ -137,29 +139,36 @@ class _AppEntryState extends ConsumerState<_AppEntry> {
     // Wire notification tap → open AlarmScreen (with task active) so music
     // starts playing immediately when the user taps the alarm notification or
     // when the full-screen intent auto-launches the app.
-    NotificationService.onTap = (taskId) {
+    NotificationService.onTap = (taskId) async {
       final tasks = ref.read(taskListProvider);
       final matched = tasks.where((t) => t.id == taskId).toList();
       if (matched.isNotEmpty && !ref.read(alarmActiveProvider)) {
-        ref.read(activeAlarmTaskIdProvider.notifier).state = taskId;
-        ref.read(alarmActiveProvider.notifier).state = true;
-        navigatorKey.currentState?.push(
-          MaterialPageRoute(
-            fullscreenDialog: true,
-            builder: (_) => const AlarmScreen(),
-          ),
-        );
+        final task = matched.first;
+        // Hanya buka AlarmScreen untuk task dengan alarmMusic
+        if (task.alarmMode == AlarmMode.alarmMusic) {
+          // Cancel the notification first so its sound stops before AlarmScreen
+          // starts playing the in-app audio (prevents double sound).
+          await NotificationService.cancelAlarmOnly(taskId);
+          ref.read(activeAlarmTaskIdProvider.notifier).state = taskId;
+          ref.read(alarmActiveProvider.notifier).state = true;
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(
+              fullscreenDialog: true,
+              builder: (_) => const AlarmScreen(),
+            ),
+          );
+        }
       }
     };
     // Check if app was launched via a notification
     NotificationService.checkLaunchPayload();
 
-    // Foreground alarm checker — fires every 30 s.
+    // Foreground alarm checker — fires every 5 s.
     // When the scheduled time arrives while the app is in the foreground,
     // flutter_local_notifications won't open AlarmScreen automatically,
     // so we check manually and push the screen.
     // Also checks for tasks that have become overdue.
-    _alarmChecker = Timer.periodic(const Duration(seconds: 30), (_) {
+    _alarmChecker = Timer.periodic(const Duration(seconds: 5), (_) {
       _checkForegroundAlarms();
       ref.read(taskListProvider.notifier).checkAndUpdateOverdue();
     });
@@ -174,6 +183,9 @@ class _AppEntryState extends ConsumerState<_AppEntry> {
 
     for (final task in tasks) {
       if (task.status == TaskStatus.completed) continue;
+      // Hanya buka AlarmScreen untuk task dengan alarmMusic,
+      // karena notificationOnly cukup via notifikasi sistem.
+      if (task.alarmMode != AlarmMode.alarmMusic) continue;
 
       final alarmDt = DateTime(
         task.date.year,
@@ -192,6 +204,9 @@ class _AppEntryState extends ConsumerState<_AppEntry> {
       if (diff >= 0 && diff <= 90) {
         _firedForeground.add(key);
         ref.read(taskListProvider.notifier).markInProgress(task.id);
+        // Cancel notification sound before AlarmScreen opens to prevent
+        // the notification audio overlapping with in-app alarm audio.
+        NotificationService.cancelAlarmOnly(task.id);
         ref.read(activeAlarmTaskIdProvider.notifier).state = task.id;
         ref.read(alarmActiveProvider.notifier).state = true;
         navigatorKey.currentState?.push(

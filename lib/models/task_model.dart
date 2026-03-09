@@ -10,6 +10,98 @@ enum TaskPriority { low, medium, high }
 
 enum TaskCategory { work, personal, health, study, other }
 
+// ── Checklist Item ────────────────────────────────────────────────────────────
+class ChecklistItem {
+  final String id;
+  final String title;
+  final bool isChecked;
+
+  const ChecklistItem({
+    required this.id,
+    required this.title,
+    this.isChecked = false,
+  });
+
+  ChecklistItem copyWith({String? id, String? title, bool? isChecked}) =>
+      ChecklistItem(
+        id: id ?? this.id,
+        title: title ?? this.title,
+        isChecked: isChecked ?? this.isChecked,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'isChecked': isChecked,
+      };
+
+  factory ChecklistItem.fromJson(Map<String, dynamic> json) => ChecklistItem(
+        id: json['id'] as String,
+        title: json['title'] as String,
+        isChecked: json['isChecked'] as bool? ?? false,
+      );
+}
+
+// ── Sub-task (recursive) ──────────────────────────────────────────────────────
+class SubTask {
+  final String id;
+  final String title;
+  final bool isChecked;
+  final List<ChecklistItem> checklist;
+  final List<SubTask> subTasks;
+
+  const SubTask({
+    required this.id,
+    required this.title,
+    this.isChecked = false,
+    this.checklist = const [],
+    this.subTasks = const [],
+  });
+
+  SubTask copyWith({
+    String? id,
+    String? title,
+    bool? isChecked,
+    List<ChecklistItem>? checklist,
+    List<SubTask>? subTasks,
+  }) =>
+      SubTask(
+        id: id ?? this.id,
+        title: title ?? this.title,
+        isChecked: isChecked ?? this.isChecked,
+        checklist: checklist ?? this.checklist,
+        subTasks: subTasks ?? this.subTasks,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'isChecked': isChecked,
+        'checklist': checklist.map((c) => c.toJson()).toList(),
+        'subTasks': subTasks.map((s) => s.toJson()).toList(),
+      };
+
+  factory SubTask.fromJson(Map<String, dynamic> json) => SubTask(
+        id: json['id'] as String,
+        title: json['title'] as String,
+        isChecked: json['isChecked'] as bool? ?? false,
+        checklist: (json['checklist'] as List<dynamic>?)
+                ?.map((e) => ChecklistItem.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            [],
+        subTasks: (json['subTasks'] as List<dynamic>?)
+                ?.map((e) => SubTask.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            [],
+      );
+
+  // ── Progress helpers ────────────────────────────────────────────────────
+  int get totalItems => checklist.length + subTasks.length;
+  int get completedItems =>
+      checklist.where((c) => c.isChecked).length +
+      subTasks.where((s) => s.isChecked).length;
+}
+
 class TaskModel {
   final String id;
   final String title;
@@ -48,6 +140,10 @@ class TaskModel {
   final Color colorTag;
   final List<String> history;
 
+  // ── Checklist & Sub-tasks ──────────────────────────────────────────────────
+  final List<ChecklistItem> checklist;
+  final List<SubTask> subTasks;
+
   const TaskModel({
     required this.id,
     required this.title,
@@ -75,6 +171,8 @@ class TaskModel {
     required this.reminders,
     required this.colorTag,
     required this.history,
+    this.checklist = const [],
+    this.subTasks = const [],
   });
 
   // ── JSON serialization ─────────────────────────────────────────────────────
@@ -107,6 +205,8 @@ class TaskModel {
         'reminders': reminders,
         'colorTag': colorTag.toARGB32(),
         'history': history,
+        'checklist': checklist.map((c) => c.toJson()).toList(),
+        'subTasks': subTasks.map((s) => s.toJson()).toList(),
       };
 
   factory TaskModel.fromJson(Map<String, dynamic> json) {
@@ -161,6 +261,14 @@ class TaskModel {
       colorTag: Color(json['colorTag'] as int),
       history:
           (json['history'] as List<dynamic>).map((e) => e as String).toList(),
+      checklist: (json['checklist'] as List<dynamic>?)
+              ?.map((e) => ChecklistItem.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+      subTasks: (json['subTasks'] as List<dynamic>?)
+              ?.map((e) => SubTask.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
   }
 
@@ -193,6 +301,8 @@ class TaskModel {
     List<String>? reminders,
     Color? colorTag,
     List<String>? history,
+    List<ChecklistItem>? checklist,
+    List<SubTask>? subTasks,
   }) {
     return TaskModel(
       id: id ?? this.id,
@@ -221,6 +331,8 @@ class TaskModel {
       reminders: reminders ?? this.reminders,
       colorTag: colorTag ?? this.colorTag,
       history: history ?? this.history,
+      checklist: checklist ?? this.checklist,
+      subTasks: subTasks ?? this.subTasks,
     );
   }
 
@@ -314,4 +426,18 @@ class TaskModel {
     final m = dueTime!.minute.toString().padLeft(2, '0');
     return '$h:$m';
   }
+
+  // ── Checklist progress ────────────────────────────────────────────────────
+  int get totalChecklistItems =>
+      checklist.length +
+      subTasks.fold(0, (sum, st) => sum + 1 + st.checklist.length);
+
+  int get completedChecklistItems =>
+      checklist.where((c) => c.isChecked).length +
+      subTasks.fold(
+          0,
+          (sum, st) =>
+              sum +
+              (st.isChecked ? 1 : 0) +
+              st.checklist.where((c) => c.isChecked).length);
 }

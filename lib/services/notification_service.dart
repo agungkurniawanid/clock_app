@@ -22,6 +22,8 @@ class NotificationService {
   static bool dndEnabled = false;
   static String defaultAlarmMusic = 'alarm_clock.mp3';
   static double defaultAlarmVolume = 1.0; // 0.0–1.0
+  static String defaultNotifMusic = 'alarm_clock.mp3';
+  static double defaultNotifVolume = 1.0; // 0.0–1.0
   static String defaultReminder = '1 Hour Before';
 
   // ── Init ──────────────────────────────────────────────────────────────────
@@ -257,6 +259,14 @@ class NotificationService {
   }
 
   // ── Cancel ────────────────────────────────────────────────────────────────
+
+  /// Cancels only the alarm notification (not reminders).
+  /// Call this before pushing AlarmScreen so the notification sound stops
+  /// immediately and doesn't overlap with the in-app audio.
+  static Future<void> cancelAlarmOnly(String taskId) async {
+    await _plugin.cancel(_alarmId(taskId));
+  }
+
   static Future<void> cancelTaskAlarm(String taskId) async {
     await _plugin.cancel(_alarmId(taskId));
     for (int i = 0; i < 6; i++) {

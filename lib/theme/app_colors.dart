@@ -13,7 +13,7 @@ const Color darkTextSecondary = Color(0xFF8888AA);
 // ─── Light Palette ───────────────────────────────────────────────────────────
 const Color lightBackground = Color(0xFFF5F5FF);
 const Color lightSurface = Color(0xFFFFFFFF);
-const Color lightCard = Color(0xFFEEEEF8);
+const Color lightCard = Color(0xFFFFFFFF);
 const Color lightPrimary = Color(0xFF6C5CE7);
 const Color lightSecondary = Color(0xFF00B894);
 const Color lightAccent = Color(0xFFE84393);

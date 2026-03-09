@@ -6,6 +6,7 @@ import '../services/storage_service.dart';
 import '../services/audio_service.dart';
 import '../services/notification_service.dart';
 import '../theme/app_colors.dart';
+import '../utils/app_toast.dart';
 import '../data/dummy_data.dart';
 import 'signup_screen.dart';
 import 'music_screen.dart';
@@ -250,6 +251,7 @@ class SettingsScreen extends ConsumerWidget {
                 final m = music.firstWhere((x) => x.id == selected,
                     orElse: () => music.first);
                 ref.read(defaultNotifMusicProvider.notifier).state = m.fileName;
+                NotificationService.defaultNotifMusic = m.fileName;
                 await StorageService.saveDefaultNotifMusic(m.fileName);
               },
               borderRadius: BorderRadius.circular(10),
@@ -317,8 +319,10 @@ class SettingsScreen extends ConsumerWidget {
                       onChanged: (v) => ref
                           .read(defaultNotifVolumeProvider.notifier)
                           .state = v,
-                      onChangeEnd: (v) =>
-                          StorageService.saveDefaultNotifVolume(v),
+                      onChangeEnd: (v) {
+                        StorageService.saveDefaultNotifVolume(v);
+                        NotificationService.defaultNotifVolume = v / 100.0;
+                      },
                     ),
                   ),
                   Text('${defaultNotifVol.round()}%',
@@ -350,6 +354,7 @@ class SettingsScreen extends ConsumerWidget {
                   ref.read(defaultReminderProvider.notifier).state = v!;
                   NotificationService.defaultReminder = v;
                   StorageService.saveDefaultReminder(v);
+                  ref.read(taskListProvider.notifier).rescheduleAll();
                 },
               ),
             ),
@@ -365,6 +370,7 @@ class SettingsScreen extends ConsumerWidget {
                 ref.read(vibrationEnabledProvider.notifier).state = v;
                 NotificationService.vibrationEnabled = v;
                 StorageService.saveVibration(v);
+                ref.read(taskListProvider.notifier).rescheduleAll();
               },
               title: const Text('Vibration'),
               secondary: const Icon(Icons.vibration_rounded),
@@ -379,6 +385,7 @@ class SettingsScreen extends ConsumerWidget {
                 ref.read(dndEnabledProvider.notifier).state = v;
                 NotificationService.dndEnabled = v;
                 StorageService.saveDnd(v);
+                ref.read(taskListProvider.notifier).rescheduleAll();
               },
               title: const Text('Do Not Disturb'),
               secondary: const Icon(Icons.do_not_disturb_on_rounded),
@@ -618,15 +625,13 @@ class SettingsScreen extends ConsumerWidget {
       BuildContext context, String fileName, double volume) async {
     await AudioService.instance.previewAsset(fileName, volume: volume);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Playing: $fileName'),
-          behavior: SnackBarBehavior.floating,
-          action: SnackBarAction(
-            label: 'Stop',
-            onPressed: () => AudioService.instance.stop(),
-          ),
-        ),
+      AppToast.show(
+        context,
+        'Playing: $fileName',
+        type: ToastType.info,
+        actionLabel: 'Stop',
+        onAction: () => AudioService.instance.stop(),
+        duration: const Duration(seconds: 5),
       );
     }
   }
@@ -735,10 +740,11 @@ class SettingsScreen extends ConsumerWidget {
               ref.read(hasUnsyncedLocalTasksProvider.notifier).state = false;
               await StorageService.saveHasUnsynced(false);
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Task lokal berhasil disinkronisasi.'),
-                  behavior: SnackBarBehavior.floating,
-                ));
+                AppToast.show(
+                  context,
+                  'Task lokal berhasil disinkronisasi.',
+                  type: ToastType.success,
+                );
               }
             },
             style: ElevatedButton.styleFrom(
@@ -795,10 +801,11 @@ class SettingsScreen extends ConsumerWidget {
               await NotificationService.cancelAll();
               ref.read(taskListProvider.notifier).clearAll();
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Semua task berhasil dihapus.'),
-                  behavior: SnackBarBehavior.floating,
-                ));
+                AppToast.show(
+                  context,
+                  'Semua task berhasil dihapus.',
+                  type: ToastType.warning,
+                );
               }
             },
             style: ElevatedButton.styleFrom(
@@ -1039,9 +1046,20 @@ class SettingsScreen extends ConsumerWidget {
                 icon: Icons.chat_rounded,
                 color: const Color(0xFF25D366),
                 label: 'WhatsApp',
-                value: '081331640909',
-                onTap: () => launchUrl(Uri.parse('https://wa.me/6281331640909'),
-                    mode: LaunchMode.externalApplication)),
+                value: '081331640909', onTap: () {
+              const phone = '6281331640909';
+              const message = 'Halo Kak Agung! 👋\n\n'
+                  'Saya pengguna aplikasi:\n'
+                  '📱 *Smart Alarm & Task Scheduler*\n\n'
+                  'Saya ingin menghubungi Anda terkait:\n'
+                  '[Tulis pesan Anda di sini...]\n\n'
+                  'Terima kasih! 🙌';
+              final encoded = Uri.encodeComponent(message);
+              launchUrl(
+                Uri.parse('https://wa.me/$phone?text=$encoded'),
+                mode: LaunchMode.externalApplication,
+              );
+            }),
             const SizedBox(height: 10),
             _devContactTile(context,
                 isDark: isDark,
