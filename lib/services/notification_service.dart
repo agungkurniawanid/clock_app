@@ -17,6 +17,13 @@ class NotificationService {
   // Callback wired in main.dart to navigate → AlarmScreen
   static OnNotificationTap? onTap;
 
+  // ── User-configurable settings (set from main.dart after loading prefs) ───
+  static bool vibrationEnabled = true;
+  static bool dndEnabled = false;
+  static String defaultAlarmMusic = 'alarm_clock.mp3';
+  static double defaultAlarmVolume = 1.0; // 0.0–1.0
+  static String defaultReminder = '1 Hour Before';
+
   // ── Init ──────────────────────────────────────────────────────────────────
   static Future<void> init() async {
     if (_initialized) return;
@@ -129,7 +136,7 @@ class NotificationService {
     final scheduled = _tzFrom(task.date, task.time);
     if (scheduled == null) return;
 
-    const androidDetails = AndroidNotificationDetails(
+    final androidDetails = AndroidNotificationDetails(
       'alarm_channel',
       'Smart Alarm',
       channelDescription: 'Task alarms — rings even with screen off',
@@ -138,8 +145,8 @@ class NotificationService {
       fullScreenIntent: true,
       category: AndroidNotificationCategory.alarm,
       playSound: true,
-      sound: RawResourceAndroidNotificationSound('alarm_clock'),
-      enableVibration: true,
+      sound: const RawResourceAndroidNotificationSound('alarm_clock'),
+      enableVibration: vibrationEnabled,
       visibility: NotificationVisibility.public,
       autoCancel: false,
     );
@@ -158,7 +165,7 @@ class NotificationService {
           ? task.description
           : 'Time to start your task!',
       scheduled,
-      const NotificationDetails(android: androidDetails, iOS: iosDetails),
+      NotificationDetails(android: androidDetails, iOS: iosDetails),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
@@ -171,8 +178,12 @@ class NotificationService {
   // When alarmMode == alarmMusic the reminder fires as a full-screen alarm
   // (same channel as the main alarm, so the app opens AlarmScreen).
   // When alarmMode == notificationOnly it shows a quiet reminder notification.
+  // DND (22:00–07:00) suppresses notificationOnly reminders only.
   static Future<void> scheduleReminders(TaskModel task) async {
-    if (!task.reminders.isNotEmpty) return;
+    // Use default reminder when task has none configured
+    final remindersToUse =
+        task.reminders.isNotEmpty ? task.reminders : [defaultReminder];
+
     final taskDt = DateTime(
       task.date.year,
       task.date.month,
@@ -183,14 +194,19 @@ class NotificationService {
 
     final useAlarmChannel = task.alarmMode == AlarmMode.alarmMusic;
 
-    for (int i = 0; i < task.reminders.length; i++) {
-      final mins = _reminderMinutes(task.reminders[i]);
+    for (int i = 0; i < remindersToUse.length; i++) {
+      final mins = _reminderMinutes(remindersToUse[i]);
       if (mins == null) continue;
       final remind = taskDt.subtract(Duration(minutes: mins));
       if (remind.isBefore(DateTime.now())) continue;
 
+      final remindTz = tz.TZDateTime.from(remind, tz.local);
+
+      // DND: skip non-alarm notifications that fall within quiet hours
+      if (!useAlarmChannel && dndEnabled && _isDndTime(remindTz)) continue;
+
       final AndroidNotificationDetails androidDetails = useAlarmChannel
-          ? const AndroidNotificationDetails(
+          ? AndroidNotificationDetails(
               'alarm_channel',
               'Smart Alarm',
               channelDescription: 'Task alarms — rings even with screen off',
@@ -199,27 +215,27 @@ class NotificationService {
               fullScreenIntent: true,
               category: AndroidNotificationCategory.alarm,
               playSound: true,
-              sound: RawResourceAndroidNotificationSound('alarm_clock'),
-              enableVibration: true,
+              sound: const RawResourceAndroidNotificationSound('alarm_clock'),
+              enableVibration: vibrationEnabled,
               visibility: NotificationVisibility.public,
               autoCancel: false,
             )
-          : const AndroidNotificationDetails(
+          : AndroidNotificationDetails(
               'reminder_channel',
               'Task Reminders',
               importance: Importance.high,
               priority: Priority.high,
               playSound: true,
-              enableVibration: true,
+              enableVibration: vibrationEnabled,
             );
 
       await _plugin.zonedSchedule(
         _reminderId(task.id, i),
         useAlarmChannel
-            ? '⏰  ${task.reminders[i]}: ${task.title}'
-            : '🔔  ${task.reminders[i]}: ${task.title}',
+            ? '⏰  ${remindersToUse[i]}: ${task.title}'
+            : '🔔  ${remindersToUse[i]}: ${task.title}',
         'Starts at ${task.timeLabel}',
-        tz.TZDateTime.from(remind, tz.local),
+        remindTz,
         NotificationDetails(android: androidDetails),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
@@ -256,6 +272,12 @@ class NotificationService {
   static int _alarmId(String id) => id.hashCode.abs() % 2147483647;
   static int _reminderId(String id, int i) =>
       (_alarmId(id) + i + 1) % 2147483647;
+
+  /// Returns true when [dt] falls within DND quiet hours (22:00 – 07:00).
+  static bool _isDndTime(tz.TZDateTime dt) {
+    final hour = dt.hour;
+    return hour >= 22 || hour < 7;
+  }
 
   static tz.TZDateTime? _tzFrom(DateTime date, TimeOfDay time) {
     final dt = DateTime(

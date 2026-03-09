@@ -62,8 +62,13 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
         : tasks.first;
 
     if (task.alarmMode == AlarmMode.alarmMusic) {
-      final vol = (task.volume / 100.0).clamp(0.0, 1.0);
-      final file = task.musicFile ?? AudioService.defaultAlarm;
+      // If task has no specific music set, fall back to the global default.
+      final defaultMusic = ref.read(defaultMusicProvider);
+      final defaultVol = ref.read(defaultVolumeProvider);
+      final file = task.musicFile ?? defaultMusic;
+      final vol = task.musicFile != null
+          ? (task.volume / 100.0).clamp(0.0, 1.0)
+          : (defaultVol / 100.0).clamp(0.0, 1.0);
       AudioService.instance.playAsset(file, volume: vol);
     }
   }

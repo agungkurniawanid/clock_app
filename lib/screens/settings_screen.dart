@@ -15,22 +15,24 @@ class SettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode    = ref.watch(themeModeProvider);
-    final isDark       = themeMode == ThemeMode.dark ||
+    final themeMode = ref.watch(themeModeProvider);
+    final isDark = themeMode == ThemeMode.dark ||
         (themeMode == ThemeMode.system &&
             MediaQuery.platformBrightnessOf(context) == Brightness.dark);
-    final card         = isDark ? darkCard : lightCard;
-    final vibration    = ref.watch(vibrationEnabledProvider);
-    final dnd          = ref.watch(dndEnabledProvider);
-    final accentIndex  = ref.watch(accentColorIndexProvider);
-    final defaultVol   = ref.watch(defaultVolumeProvider);
+    final card = isDark ? darkCard : lightCard;
+    final vibration = ref.watch(vibrationEnabledProvider);
+    final dnd = ref.watch(dndEnabledProvider);
+    final accentIndex = ref.watch(accentColorIndexProvider);
+    final defaultVol = ref.watch(defaultVolumeProvider);
     final defaultSnooze = ref.watch(defaultSnoozeProvider);
     final defaultMusic = ref.watch(defaultMusicProvider);
     final defaultRemind = ref.watch(defaultReminderProvider);
-    final isLoggedIn   = ref.watch(isLoggedInProvider);
-    final userName     = ref.watch(currentUserNameProvider);
-    final userEmail    = ref.watch(currentUserEmailProvider);
-    final hasUnsynced  = ref.watch(hasUnsyncedLocalTasksProvider);
+    final defaultNotifMusic = ref.watch(defaultNotifMusicProvider);
+    final defaultNotifVol = ref.watch(defaultNotifVolumeProvider);
+    final isLoggedIn = ref.watch(isLoggedInProvider);
+    final userName = ref.watch(currentUserNameProvider);
+    final userEmail = ref.watch(currentUserEmailProvider);
+    final hasUnsynced = ref.watch(hasUnsyncedLocalTasksProvider);
     final accentColors = [darkPrimary, darkSecondary, darkAccent, statusTodo];
 
     return Scaffold(
@@ -41,7 +43,17 @@ class SettingsScreen extends ConsumerWidget {
           // Profile
           _buildProfileSection(
               context, ref, card, isDark, isLoggedIn, userName, userEmail),
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
+
+          // ── Developer ──────────────────────────────────────────────────────
+          _sectionTitle(context, 'Developer'),
+          _buildCard(context, card, [
+            _settingRowNav(context,
+                icon: Icons.code_rounded,
+                label: 'Informasi Developer',
+                onTap: () => _showDeveloperModal(context, isDark, card)),
+          ]),
+          const SizedBox(height: 20),
 
           // Sync Banner
           if (isLoggedIn && hasUnsynced) _buildSyncBanner(context, ref, isDark),
@@ -59,9 +71,11 @@ class SettingsScreen extends ConsumerWidget {
                 value: themeMode,
                 underline: const SizedBox(),
                 items: const [
-                  DropdownMenuItem(value: ThemeMode.dark,   child: Text('Dark')),
-                  DropdownMenuItem(value: ThemeMode.light,  child: Text('Light')),
-                  DropdownMenuItem(value: ThemeMode.system, child: Text('System')),
+                  DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark')),
+                  DropdownMenuItem(
+                      value: ThemeMode.light, child: Text('Light')),
+                  DropdownMenuItem(
+                      value: ThemeMode.system, child: Text('System')),
                 ],
                 onChanged: (v) {
                   ref.read(themeModeProvider.notifier).state = v!;
@@ -115,10 +129,11 @@ class SettingsScreen extends ConsumerWidget {
                 );
                 // Pick selection from provider
                 final selected = ref.read(selectedMusicIdProvider);
-                final music    = ref.read(musicListProvider);
+                final music = ref.read(musicListProvider);
                 final m = music.firstWhere((x) => x.id == selected,
                     orElse: () => music.first);
                 ref.read(defaultMusicProvider.notifier).state = m.fileName;
+                NotificationService.defaultAlarmMusic = m.fileName;
                 await StorageService.saveDefaultMusic(m.fileName);
               },
               borderRadius: BorderRadius.circular(10),
@@ -128,15 +143,14 @@ class SettingsScreen extends ConsumerWidget {
                   const Icon(Icons.music_note_rounded, size: 20),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text('Default Music',
-                        style: Theme.of(context).textTheme.bodyLarge
-                            ?.copyWith(fontWeight: FontWeight.w500,
-                                fontSize: 14)),
+                    child: Text('Default Alarm Music',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w500, fontSize: 14)),
                   ),
                   // Preview button
                   GestureDetector(
-                    onTap: () => _previewDefaultMusic(context, defaultMusic,
-                        defaultVol / 100.0),
+                    onTap: () => _previewDefaultMusic(
+                        context, defaultMusic, defaultVol / 100.0),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 5),
@@ -165,7 +179,8 @@ class SettingsScreen extends ConsumerWidget {
                         maxLines: 1),
                   ),
                   const SizedBox(width: 4),
-                  Icon(Icons.chevron_right_rounded, size: 18,
+                  Icon(Icons.chevron_right_rounded,
+                      size: 18,
                       color: Theme.of(context).textTheme.bodyMedium?.color),
                 ]),
               ),
@@ -182,14 +197,20 @@ class SettingsScreen extends ConsumerWidget {
                     width: 100,
                     child: Slider(
                       value: defaultVol,
-                      min: 0, max: 100,
+                      min: 0,
+                      max: 100,
                       onChanged: (v) =>
                           ref.read(defaultVolumeProvider.notifier).state = v,
-                      onChangeEnd: (v) => StorageService.saveDefaultVolume(v),
+                      onChangeEnd: (v) {
+                        StorageService.saveDefaultVolume(v);
+                        NotificationService.defaultAlarmVolume = v / 100.0;
+                      },
                     ),
                   ),
                   Text('${defaultVol.round()}%',
-                      style: Theme.of(context).textTheme.bodySmall
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
                           ?.copyWith(fontWeight: FontWeight.w700)),
                 ],
               ),
@@ -203,13 +224,109 @@ class SettingsScreen extends ConsumerWidget {
                 value: defaultSnooze,
                 underline: const SizedBox(),
                 items: [5, 10, 15, 20, 30]
-                    .map((v) => DropdownMenuItem(
-                        value: v, child: Text('$v Minutes')))
+                    .map((v) =>
+                        DropdownMenuItem(value: v, child: Text('$v Minutes')))
                     .toList(),
                 onChanged: (v) {
                   ref.read(defaultSnoozeProvider.notifier).state = v!;
                   StorageService.saveDefaultSnooze(v);
                 },
+              ),
+            ),
+          ]),
+          const SizedBox(height: 20),
+
+          // ── Notification Defaults ──────────────────────────────────────────
+          _sectionTitle(context, 'Notification Defaults'),
+          _buildCard(context, card, [
+            InkWell(
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MusicScreen()),
+                );
+                final selected = ref.read(selectedMusicIdProvider);
+                final music = ref.read(musicListProvider);
+                final m = music.firstWhere((x) => x.id == selected,
+                    orElse: () => music.first);
+                ref.read(defaultNotifMusicProvider.notifier).state = m.fileName;
+                await StorageService.saveDefaultNotifMusic(m.fileName);
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Row(children: [
+                  const Icon(Icons.notifications_active_rounded, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text('Default Notification Music',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w500, fontSize: 14)),
+                  ),
+                  GestureDetector(
+                    onTap: () => _previewDefaultMusic(
+                        context, defaultNotifMusic, defaultNotifVol / 100.0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .secondary
+                            .withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text('▶  Preview',
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.secondary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(defaultNotifMusic,
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.w500),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.chevron_right_rounded,
+                      size: 18,
+                      color: Theme.of(context).textTheme.bodyMedium?.color),
+                ]),
+              ),
+            ),
+            _divider(context),
+            _settingRow(
+              context,
+              icon: Icons.volume_up_rounded,
+              label: 'Default Volume',
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 100,
+                    child: Slider(
+                      value: defaultNotifVol,
+                      min: 0,
+                      max: 100,
+                      onChanged: (v) => ref
+                          .read(defaultNotifVolumeProvider.notifier)
+                          .state = v,
+                      onChangeEnd: (v) =>
+                          StorageService.saveDefaultNotifVolume(v),
+                    ),
+                  ),
+                  Text('${defaultNotifVol.round()}%',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(fontWeight: FontWeight.w700)),
+                ],
               ),
             ),
           ]),
@@ -231,6 +348,7 @@ class SettingsScreen extends ConsumerWidget {
                     .toList(),
                 onChanged: (v) {
                   ref.read(defaultReminderProvider.notifier).state = v!;
+                  NotificationService.defaultReminder = v;
                   StorageService.saveDefaultReminder(v);
                 },
               ),
@@ -245,10 +363,13 @@ class SettingsScreen extends ConsumerWidget {
               value: vibration,
               onChanged: (v) {
                 ref.read(vibrationEnabledProvider.notifier).state = v;
+                NotificationService.vibrationEnabled = v;
                 StorageService.saveVibration(v);
               },
               title: const Text('Vibration'),
               secondary: const Icon(Icons.vibration_rounded),
+              subtitle: const Text('Applies to all alarm & notification alerts',
+                  style: TextStyle(fontSize: 11)),
               contentPadding: EdgeInsets.zero,
             ),
             _divider(context),
@@ -256,12 +377,16 @@ class SettingsScreen extends ConsumerWidget {
               value: dnd,
               onChanged: (v) {
                 ref.read(dndEnabledProvider.notifier).state = v;
+                NotificationService.dndEnabled = v;
                 StorageService.saveDnd(v);
               },
               title: const Text('Do Not Disturb'),
               secondary: const Icon(Icons.do_not_disturb_on_rounded),
-              subtitle:
-                  dnd ? const Text('DND Hours: 22:00 – 07:00') : null,
+              subtitle: Text(
+                  dnd
+                      ? 'Active — normal notifications suppressed 22:00 – 07:00'
+                      : 'Disabled — all notifications fire normally',
+                  style: const TextStyle(fontSize: 11)),
               contentPadding: EdgeInsets.zero,
             ),
           ]),
@@ -290,23 +415,14 @@ class SettingsScreen extends ConsumerWidget {
             _settingRowNav(context,
                 icon: Icons.privacy_tip_rounded,
                 label: 'Privacy Policy',
-                onTap: () {}),
+                onTap: () => _showPrivacyPolicyDialog(context, isDark, card)),
             _divider(context),
             _settingRowNav(context,
                 icon: Icons.star_rounded,
                 label: 'Rate App',
-                onTap: () {}),
+                onTap: () => _rateApp()),
           ]),
           const SizedBox(height: 20),
-
-          // ── Developer ──────────────────────────────────────────────────────
-          _sectionTitle(context, 'Developer'),
-          _buildCard(context, card, [
-            _settingRowNav(context,
-                icon: Icons.code_rounded,
-                label: 'Informasi Developer',
-                onTap: () => _showDeveloperModal(context, isDark, card)),
-          ]),
 
           // ── Account (logged in only) ───────────────────────────────────────
           if (isLoggedIn) ...[
@@ -344,13 +460,14 @@ class SettingsScreen extends ConsumerWidget {
         decoration: BoxDecoration(
           color: card,
           borderRadius: BorderRadius.circular(20),
-          gradient: LinearGradient(
-              colors: [primary.withValues(alpha: 0.10), card]),
+          gradient:
+              LinearGradient(colors: [primary.withValues(alpha: 0.10), card]),
         ),
         child: Column(children: [
           Row(children: [
             Container(
-              width: 60, height: 60,
+              width: 60,
+              height: 60,
               decoration: BoxDecoration(
                   color: primary.withValues(alpha: 0.15),
                   shape: BoxShape.circle),
@@ -358,20 +475,23 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                Text('Anda belum login',
-                    style: Theme.of(context).textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 3),
-                Text('Masuk untuk sinkronisasi task ke cloud',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontSize: 12,
-                          color: isDark
-                              ? darkTextSecondary
-                              : lightTextSecondary,
-                        )),
-              ]),
+                    Text('Anda belum login',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 3),
+                    Text('Masuk untuk sinkronisasi task ke cloud',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontSize: 12,
+                              color: isDark
+                                  ? darkTextSecondary
+                                  : lightTextSecondary,
+                            )),
+                  ]),
             ),
           ]),
           const SizedBox(height: 16),
@@ -401,28 +521,31 @@ class SettingsScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: card,
         borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-            colors: [primary.withValues(alpha: 0.15), card]),
+        gradient:
+            LinearGradient(colors: [primary.withValues(alpha: 0.15), card]),
       ),
       child: Row(children: [
         Container(
-          width: 60, height: 60,
+          width: 60,
+          height: 60,
           decoration: BoxDecoration(
-              color: primary.withValues(alpha: 0.2),
-              shape: BoxShape.circle),
+              color: primary.withValues(alpha: 0.2), shape: BoxShape.circle),
           child: Center(
             child: Text(
               userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
-              style: TextStyle(color: primary, fontSize: 24,
-                  fontWeight: FontWeight.w800),
+              style: TextStyle(
+                  color: primary, fontSize: 24, fontWeight: FontWeight.w800),
             ),
           ),
         ),
         const SizedBox(width: 16),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(userName.isNotEmpty ? userName : 'Pengguna',
-                style: Theme.of(context).textTheme.titleMedium
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
                     ?.copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(height: 3),
             Text(userEmail,
@@ -443,26 +566,31 @@ class SettingsScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: statusRisk.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: statusRisk.withValues(alpha: 0.5), width: 1.5),
+        border:
+            Border.all(color: statusRisk.withValues(alpha: 0.5), width: 1.5),
       ),
       child: Row(children: [
         Container(
-          width: 44, height: 44,
+          width: 44,
+          height: 44,
           decoration: BoxDecoration(
-              color: statusRisk.withValues(alpha: 0.2),
-              shape: BoxShape.circle),
+              color: statusRisk.withValues(alpha: 0.2), shape: BoxShape.circle),
           child: const Icon(Icons.cloud_upload_rounded,
               color: statusRisk, size: 22),
         ),
         const SizedBox(width: 14),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Task lokal belum tersinkronisasi',
-                style: TextStyle(color: statusRisk, fontWeight: FontWeight.w700,
+                style: TextStyle(
+                    color: statusRisk,
+                    fontWeight: FontWeight.w700,
                     fontSize: 13)),
             const SizedBox(height: 2),
             Text('Pindahkan task lokal Anda ke cloud.',
-                style: TextStyle(fontSize: 12,
+                style: TextStyle(
+                    fontSize: 12,
                     color: isDark ? darkTextSecondary : lightTextSecondary)),
           ]),
         ),
@@ -473,8 +601,8 @@ class SettingsScreen extends ConsumerWidget {
             backgroundColor: statusRisk,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             minimumSize: Size.zero,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
@@ -508,17 +636,18 @@ class SettingsScreen extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10, left: 2),
       child: Text(title,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700, fontSize: 13)),
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.w700, fontSize: 13)),
     );
   }
 
-  Widget _buildCard(
-      BuildContext context, Color card, List<Widget> children) {
+  Widget _buildCard(BuildContext context, Color card, List<Widget> children) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-          color: card, borderRadius: BorderRadius.circular(18)),
+      decoration:
+          BoxDecoration(color: card, borderRadius: BorderRadius.circular(18)),
       child: Column(children: children),
     );
   }
@@ -531,15 +660,14 @@ class SettingsScreen extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(children: [
-        Icon(icon, size: 20,
+        Icon(icon,
+            size: 20,
             color: color ?? Theme.of(context).textTheme.bodyLarge?.color),
         const SizedBox(width: 12),
         Expanded(
           child: Text(label,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14)),
+                  color: color, fontWeight: FontWeight.w500, fontSize: 14)),
         ),
         trailing,
       ]),
@@ -558,7 +686,8 @@ class SettingsScreen extends ConsumerWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(children: [
-          Icon(icon, size: 20,
+          Icon(icon,
+              size: 20,
               color: color ?? Theme.of(context).textTheme.bodyLarge?.color),
           const SizedBox(width: 12),
           Expanded(
@@ -571,11 +700,14 @@ class SettingsScreen extends ConsumerWidget {
           ),
           if (value != null) ...[
             Text(value,
-                style: Theme.of(context).textTheme.bodyMedium
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
                     ?.copyWith(fontWeight: FontWeight.w500)),
             const SizedBox(width: 4),
           ],
-          Icon(Icons.chevron_right_rounded, size: 18,
+          Icon(Icons.chevron_right_rounded,
+              size: 18,
               color: color ?? Theme.of(context).textTheme.bodyMedium?.color),
         ]),
       ),
@@ -591,8 +723,7 @@ class SettingsScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Sinkronisasi Task'),
-        content: const Text(
-            'Pindahkan semua task lokal ke akun cloud Anda?'),
+        content: const Text('Pindahkan semua task lokal ke akun cloud Anda?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -627,8 +758,7 @@ class SettingsScreen extends ConsumerWidget {
         content: const Text('Apakah Anda yakin ingin keluar dari akun?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Batal')),
+              onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
@@ -640,8 +770,7 @@ class SettingsScreen extends ConsumerWidget {
               await StorageService.saveHasUnsynced(true);
             },
             style: ElevatedButton.styleFrom(
-                backgroundColor: statusOverdue,
-                foregroundColor: Colors.white),
+                backgroundColor: statusOverdue, foregroundColor: Colors.white),
             child: const Text('Keluar'),
           ),
         ],
@@ -658,8 +787,7 @@ class SettingsScreen extends ConsumerWidget {
             'Hapus semua task dari perangkat ini? Tindakan ini tidak dapat dibatalkan.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Batal')),
+              onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
@@ -674,8 +802,7 @@ class SettingsScreen extends ConsumerWidget {
               }
             },
             style: ElevatedButton.styleFrom(
-                backgroundColor: statusOverdue,
-                foregroundColor: Colors.white),
+                backgroundColor: statusOverdue, foregroundColor: Colors.white),
             child: const Text('Hapus Semua'),
           ),
         ],
@@ -683,8 +810,185 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  void _showDeveloperModal(
-      BuildContext context, bool isDark, Color card) {
+  void _showPrivacyPolicyDialog(BuildContext context, bool isDark, Color card) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.82,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                child: Row(children: [
+                  Icon(Icons.privacy_tip_rounded,
+                      color: Theme.of(ctx).colorScheme.primary, size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Privacy Policy',
+                      style: Theme.of(ctx)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w800, fontSize: 18),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close_rounded),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ]),
+              ),
+              Divider(height: 1, color: Theme.of(ctx).dividerTheme.color),
+              // Body
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _privacySection(
+                          ctx,
+                          'Kebijakan Privasi',
+                          'Tanggal berlaku: 1 Januari 2025\n\n'
+                              'Smart Alarm & Task Scheduler ("Aplikasi") dikembangkan '
+                              'oleh Agung Kurniawan sebagai aplikasi freeware. Layanan '
+                              'ini disediakan tanpa biaya dan dimaksudkan untuk '
+                              'digunakan apa adanya.\n\n'
+                              'Kebijakan Privasi ini menjelaskan kebijakan kami '
+                              'mengenai pengumpulan, penggunaan, dan pengungkapan '
+                              'informasi pribadi apabila Anda menggunakan Aplikasi ini.'),
+                      _privacySection(
+                          ctx,
+                          '1. Pengumpulan dan Penggunaan Data',
+                          'Aplikasi ini tidak mengumpulkan data pribadi apa pun ke '
+                              'server eksternal. Semua data yang Anda masukkan — '
+                              'termasuk nama task, jadwal, pengingat, dan preferensi '
+                              'pengaturan — disimpan secara lokal di perangkat Anda '
+                              'menggunakan mekanisme penyimpanan bawaan Android '
+                              '(SharedPreferences). Data tersebut tidak pernah '
+                              'dikirim, dibagikan, atau dijual kepada pihak ketiga.'),
+                      _privacySection(
+                          ctx,
+                          '2. Izin yang Digunakan',
+                          '• Notifikasi — digunakan untuk menampilkan pengingat dan '
+                              'alarm task pada waktu yang dijadwalkan.\n'
+                              '• Alarm Tepat Waktu (SCHEDULE_EXACT_ALARM) — '
+                              'digunakan agar alarm dapat berbunyi tepat pada waktu '
+                              'yang ditentukan pengguna.\n'
+                              '• Full Screen Intent — digunakan agar layar alarm '
+                              'dapat tampil bahkan saat layar perangkat terkunci.\n'
+                              '• Vibration — digunakan untuk getaran saat notifikasi '
+                              'atau alarm berlangsung.\n'
+                              '• Penyimpanan (READ_EXTERNAL_STORAGE, opsional) — '
+                              'digunakan hanya jika pengguna memilih file musik dari '
+                              'perangkat.'),
+                      _privacySection(
+                          ctx,
+                          '3. Layanan Pihak Ketiga',
+                          'Aplikasi ini tidak terintegrasi dengan layanan analitik, '
+                              'iklan, atau pelacakan pihak ketiga apa pun. '
+                              'Tidak ada SDK pemasaran yang disertakan di dalam '
+                              'Aplikasi ini.'),
+                      _privacySection(
+                          ctx,
+                          '4. Keamanan Data',
+                          'Kami berkomitmen untuk melindungi informasi Anda. '
+                              'Semua data disimpan secara lokal di perangkat Anda '
+                              'dan tidak dapat diakses oleh pihak lain tanpa akses '
+                              'fisik ke perangkat tersebut. Kami menyarankan Anda '
+                              'untuk mengaktifkan kunci layar perangkat guna '
+                              'menambah lapisan keamanan.'),
+                      _privacySection(
+                          ctx,
+                          '5. Hak Pengguna',
+                          'Anda memiliki kendali penuh atas semua data di dalam '
+                              'Aplikasi ini. Anda dapat menghapus seluruh data task '
+                              'melalui menu Settings → Data & Backup → Clear All Tasks, '
+                              'atau menghapus instalasi Aplikasi untuk menghapus '
+                              'seluruh data secara permanen.'),
+                      _privacySection(
+                          ctx,
+                          '6. Perubahan Kebijakan',
+                          'Kami dapat memperbarui Kebijakan Privasi ini dari waktu '
+                              'ke waktu. Perubahan akan diinformasikan melalui '
+                              'pembaruan aplikasi. Penggunaan Aplikasi secara '
+                              'berkelanjutan setelah adanya perubahan berarti '
+                              'Anda menyetujui kebijakan yang diperbarui tersebut.'),
+                      _privacySection(
+                          ctx,
+                          '7. Hubungi Kami',
+                          'Jika Anda memiliki pertanyaan mengenai Kebijakan Privasi '
+                              'ini, silakan hubungi kami:\n\n'
+                              'Email: agungklewang26@gmail.com\n'
+                              'WhatsApp: +62 813-3164-0909'),
+                    ],
+                  ),
+                ),
+              ),
+              // Footer button
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Saya Mengerti'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _privacySection(BuildContext context, String title, String content) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title,
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w800, fontSize: 13)),
+        const SizedBox(height: 6),
+        Text(content,
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(fontSize: 12.5, height: 1.55)),
+      ]),
+    );
+  }
+
+  void _rateApp() {
+    const phone = '6281331640909';
+    const message = 'Halo Kak Agung! 👋\n\n'
+        'Saya ingin memberikan rating untuk aplikasi:\n'
+        '📱 *Smart Alarm & Task Scheduler*\n\n'
+        'Rating saya: ⭐⭐⭐⭐⭐\n\n'
+        'Komentar: [Tulis komentar Anda di sini...]\n\n'
+        'Terima kasih sudah membuat aplikasi yang keren! 🙌';
+    final encoded = Uri.encodeComponent(message);
+    launchUrl(
+      Uri.parse('https://wa.me/$phone?text=$encoded'),
+      mode: LaunchMode.externalApplication,
+    );
+  }
+
+  void _showDeveloperModal(BuildContext context, bool isDark, Color card) {
     final primary = Theme.of(context).colorScheme.primary;
     showModalBottomSheet(
       context: context,
@@ -693,15 +997,15 @@ class SettingsScreen extends ConsumerWidget {
       builder: (ctx) => Container(
         decoration: BoxDecoration(
           color: card,
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 40, height: 4,
+              width: 40,
+              height: 4,
               margin: const EdgeInsets.only(bottom: 20),
               decoration: BoxDecoration(
                 color: isDark
@@ -711,7 +1015,8 @@ class SettingsScreen extends ConsumerWidget {
               ),
             ),
             Container(
-              width: 72, height: 72,
+              width: 72,
+              height: 72,
               decoration: BoxDecoration(
                   color: primary.withValues(alpha: 0.15),
                   shape: BoxShape.circle),
@@ -729,22 +1034,31 @@ class SettingsScreen extends ConsumerWidget {
                     color: isDark ? darkTextSecondary : lightTextSecondary,
                     fontSize: 13)),
             const SizedBox(height: 24),
-            _devContactTile(context, isDark: isDark,
-                icon: Icons.chat_rounded, color: const Color(0xFF25D366),
-                label: 'WhatsApp', value: '081331640909',
+            _devContactTile(context,
+                isDark: isDark,
+                icon: Icons.chat_rounded,
+                color: const Color(0xFF25D366),
+                label: 'WhatsApp',
+                value: '081331640909',
                 onTap: () => launchUrl(Uri.parse('https://wa.me/6281331640909'),
                     mode: LaunchMode.externalApplication)),
             const SizedBox(height: 10),
-            _devContactTile(context, isDark: isDark,
-                icon: Icons.email_rounded, color: const Color(0xFFEA4335),
-                label: 'Email', value: 'agungklewang26@gmail.com',
+            _devContactTile(context,
+                isDark: isDark,
+                icon: Icons.email_rounded,
+                color: const Color(0xFFEA4335),
+                label: 'Email',
+                value: 'agungklewang26@gmail.com',
                 onTap: () => launchUrl(
                     Uri.parse('mailto:agungklewang26@gmail.com'),
                     mode: LaunchMode.externalApplication)),
             const SizedBox(height: 10),
-            _devContactTile(context, isDark: isDark,
-                icon: Icons.camera_alt_rounded, color: const Color(0xFFE1306C),
-                label: 'Instagram', value: '@agungkurniawan.id',
+            _devContactTile(context,
+                isDark: isDark,
+                icon: Icons.camera_alt_rounded,
+                color: const Color(0xFFE1306C),
+                label: 'Instagram',
+                value: '@agungkurniawan.id',
                 onTap: () => launchUrl(
                     Uri.parse('https://instagram.com/agungkurniawan.id'),
                     mode: LaunchMode.externalApplication)),
@@ -755,8 +1069,11 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   Widget _devContactTile(BuildContext context,
-      {required bool isDark, required IconData icon, required Color color,
-      required String label, required String value,
+      {required bool isDark,
+      required IconData icon,
+      required Color color,
+      required String label,
+      required String value,
       required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,
@@ -770,25 +1087,26 @@ class SettingsScreen extends ConsumerWidget {
         ),
         child: Row(children: [
           Container(
-            width: 40, height: 40,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
             child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(width: 14),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(label,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: isDark
-                              ? darkTextSecondary
-                              : lightTextSecondary,
-                          fontSize: 11)),
+                      color: isDark ? darkTextSecondary : lightTextSecondary,
+                      fontSize: 11)),
               const SizedBox(height: 2),
               Text(value,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600, fontSize: 14)),
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.w600, fontSize: 14)),
             ]),
           ),
           Icon(Icons.open_in_new_rounded, size: 16, color: color),

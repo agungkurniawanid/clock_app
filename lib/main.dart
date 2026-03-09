@@ -14,6 +14,7 @@ import 'screens/task_list_screen.dart';
 import 'screens/statistics_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/alarm_screen.dart';
+import 'screens/add_task_screen.dart';
 import 'models/task_model.dart';
 
 /// Global [NavigatorKey] used by [NotificationService] to push AlarmScreen
@@ -51,6 +52,15 @@ void main() async {
   final savedDnd = await StorageService.loadDnd();
   final savedAccent = await StorageService.loadAccentIndex();
   final savedRemind = await StorageService.loadDefaultReminder();
+  final savedNotifMusic = await StorageService.loadDefaultNotifMusic();
+  final savedNotifVolume = await StorageService.loadDefaultNotifVolume();
+
+  // Apply settings to NotificationService static fields
+  NotificationService.vibrationEnabled = savedVib;
+  NotificationService.dndEnabled = savedDnd;
+  NotificationService.defaultAlarmMusic = savedMusic;
+  NotificationService.defaultAlarmVolume = savedVolume / 100.0;
+  NotificationService.defaultReminder = savedRemind;
 
   // Init notification service
   await NotificationService.init();
@@ -68,6 +78,8 @@ void main() async {
         dndEnabledProvider.overrideWith((_) => savedDnd),
         accentColorIndexProvider.overrideWith((_) => savedAccent),
         defaultReminderProvider.overrideWith((_) => savedRemind),
+        defaultNotifMusicProvider.overrideWith((_) => savedNotifMusic),
+        defaultNotifVolumeProvider.overrideWith((_) => savedNotifVolume),
         isLoggedInProvider.overrideWith((_) => savedIsLoggedIn),
         currentUserNameProvider.overrideWith((_) => savedUserName),
         currentUserEmailProvider.overrideWith((_) => savedUserEmail),
@@ -81,17 +93,27 @@ void main() async {
 class SmartAlarmApp extends ConsumerWidget {
   const SmartAlarmApp({super.key});
 
+  static const _accentColors = [
+    Color(0xFF7B6EF6), // purple (default)
+    Color(0xFF4ECDC4), // teal
+    Color(0xFFFF6B9D), // pink
+    Color(0xFF4A90E2), // blue
+  ];
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
+    final accentIndex = ref.watch(accentColorIndexProvider);
+    final accent =
+        _accentColors[accentIndex.clamp(0, _accentColors.length - 1)];
 
     return MaterialApp(
       title: 'Smart Alarm & Task Scheduler',
       debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
       themeMode: themeMode,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
+      theme: AppTheme.buildWithAccent(Brightness.light, accent),
+      darkTheme: AppTheme.buildWithAccent(Brightness.dark, accent),
       home: const _AppEntry(),
     );
   }
@@ -225,6 +247,45 @@ class MainShell extends ConsumerWidget {
       systemNavigationBarDividerColor: Colors.transparent,
     );
 
+    final primary = Theme.of(context).colorScheme.primary;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+
+    Widget navItem(
+        IconData icon, IconData activeIcon, String label, int index) {
+      final active = navIndex == index;
+      final color = active ? primary : onSurface.withValues(alpha: 0.5);
+      return Expanded(
+        child: InkWell(
+          onTap: () => ref.read(navIndexProvider.notifier).state = index,
+          splashColor: primary.withValues(alpha: 0.1),
+          highlightColor: Colors.transparent,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: Icon(
+                  active ? activeIcon : icon,
+                  key: ValueKey(active),
+                  color: color,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: overlayStyle,
       child: Scaffold(
@@ -232,32 +293,62 @@ class MainShell extends ConsumerWidget {
           index: navIndex,
           children: _screens,
         ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: navIndex,
-          onDestinationSelected: (i) =>
-              ref.read(navIndexProvider.notifier).state = i,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home_rounded),
-              label: 'Home',
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        floatingActionButton: Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                primary,
+                primary.withValues(alpha: 0.8),
+              ],
             ),
-            NavigationDestination(
-              icon: Icon(Icons.event_note_outlined),
-              selectedIcon: Icon(Icons.event_note_rounded),
-              label: 'Schedule',
+            boxShadow: [
+              BoxShadow(
+                color: primary.withValues(alpha: 0.45),
+                blurRadius: 16,
+                spreadRadius: 2,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(32),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AddTaskScreen()),
+              ),
+              child:
+                  const Icon(Icons.add_rounded, color: Colors.white, size: 34),
             ),
-            NavigationDestination(
-              icon: Icon(Icons.bar_chart_outlined),
-              selectedIcon: Icon(Icons.bar_chart_rounded),
-              label: 'Stats',
+          ),
+        ),
+        bottomNavigationBar: BottomAppBar(
+          shape: const CircularNotchedRectangle(),
+          notchMargin: 8,
+          padding: EdgeInsets.zero,
+          elevation: 8,
+          child: SizedBox(
+            height: 62,
+            child: Row(
+              children: [
+                navItem(Icons.home_outlined, Icons.home_rounded, 'Home', 0),
+                navItem(Icons.event_note_outlined, Icons.event_note_rounded,
+                    'Schedule', 1),
+                const SizedBox(width: 80),
+                navItem(Icons.bar_chart_outlined, Icons.bar_chart_rounded,
+                    'Stats', 2),
+                navItem(Icons.settings_outlined, Icons.settings_rounded,
+                    'Settings', 3),
+              ],
             ),
-            NavigationDestination(
-              icon: Icon(Icons.settings_outlined),
-              selectedIcon: Icon(Icons.settings_rounded),
-              label: 'Settings',
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -19,6 +19,8 @@ class StorageService {
   static const _userNameKey = 'auth_user_name';
   static const _userEmailKey = 'auth_user_email';
   static const _hasUnsyncedKey = 'auth_has_unsynced';
+  static const _defaultNotifMusicKey = 'default_notif_music';
+  static const _defaultNotifVolumeKey = 'default_notif_volume';
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
   static Future<void> saveTasks(List<TaskModel> tasks) async {
@@ -70,7 +72,7 @@ class StorageService {
 
   static Future<double> loadDefaultVolume() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getDouble(_defaultVolumeKey) ?? 80.0;
+    return prefs.getDouble(_defaultVolumeKey) ?? 100.0;
   }
 
   static Future<void> saveDefaultSnooze(int minutes) async {
@@ -121,6 +123,27 @@ class StorageService {
   static Future<String> loadDefaultReminder() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_defaultReminderKey) ?? '1 Hour Before';
+  }
+
+  // ── Default Notification Music / Volume ───────────────────────────────────
+  static Future<void> saveDefaultNotifMusic(String fileName) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_defaultNotifMusicKey, fileName);
+  }
+
+  static Future<String> loadDefaultNotifMusic() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_defaultNotifMusicKey) ?? 'alarm_clock.mp3';
+  }
+
+  static Future<void> saveDefaultNotifVolume(double volume) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_defaultNotifVolumeKey, volume);
+  }
+
+  static Future<double> loadDefaultNotifVolume() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getDouble(_defaultNotifVolumeKey) ?? 100.0;
   }
 
   // ── Custom Music Files ────────────────────────────────────────────────────

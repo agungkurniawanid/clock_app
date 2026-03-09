@@ -8,7 +8,6 @@ import '../widgets/task_card.dart';
 import '../theme/app_colors.dart';
 import '../models/task_model.dart';
 import 'task_detail_screen.dart';
-import 'add_task_screen.dart';
 import 'alarm_screen.dart';
 import 'signup_screen.dart';
 
@@ -125,18 +124,6 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'home_fab',
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const AddTaskScreen()),
-        ),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Schedule'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
-        elevation: 4,
       ),
     );
   }

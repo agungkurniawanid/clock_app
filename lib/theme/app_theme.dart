@@ -7,11 +7,16 @@ class AppTheme {
   static ThemeData get dark => _buildTheme(Brightness.dark);
   static ThemeData get light => _buildTheme(Brightness.light);
 
-  static ThemeData _buildTheme(Brightness brightness) {
+  /// Build theme with a custom accent/primary color (from the user's color picker).
+  static ThemeData buildWithAccent(Brightness brightness, Color accentColor) =>
+      _buildTheme(brightness, primaryOverride: accentColor);
+
+  static ThemeData _buildTheme(Brightness brightness,
+      {Color? primaryOverride}) {
     final isDark = brightness == Brightness.dark;
     final bg = isDark ? darkBackground : lightBackground;
     final surface = isDark ? darkSurface : lightSurface;
-    final primary = isDark ? darkPrimary : lightPrimary;
+    final primary = primaryOverride ?? (isDark ? darkPrimary : lightPrimary);
     final secondary = isDark ? darkSecondary : lightSecondary;
     final textPrimary = isDark ? darkTextPrimary : lightTextPrimary;
     final textSecondary = isDark ? darkTextSecondary : lightTextSecondary;

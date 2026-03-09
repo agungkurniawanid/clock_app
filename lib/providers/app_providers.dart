@@ -498,7 +498,7 @@ class AddTaskFormState {
         time: const TimeOfDay(hour: 9, minute: 0),
         alarmMode: AlarmMode.notificationOnly,
         musicFile: null,
-        volume: 80,
+        volume: 100,
         snoozeMinutes: 15,
         reminders: const ['1 Hour Before'],
         reminderEnabled: true,
@@ -509,7 +509,7 @@ class AddTaskFormState {
         dueReminders: const [],
         dueAlarmMode: AlarmMode.notificationOnly,
         dueMusicFile: null,
-        dueVolume: 80,
+        dueVolume: 100,
         dueSnoozeMinutes: 15,
         repeat: RepeatType.none,
         weekDays: const [false, true, true, true, true, true, false],
@@ -589,11 +589,16 @@ final activeAlarmTaskIdProvider = StateProvider<String?>((ref) => null);
 // ─── Settings Providers ───────────────────────────────────────────────────────
 final accentColorIndexProvider = StateProvider<int>((ref) => 0);
 final defaultMusicProvider = StateProvider<String>((ref) => 'alarm_clock.mp3');
-final defaultVolumeProvider = StateProvider<double>((ref) => 80.0);
+final defaultVolumeProvider = StateProvider<double>((ref) => 100.0);
 final defaultSnoozeProvider = StateProvider<int>((ref) => 15);
 final vibrationEnabledProvider = StateProvider<bool>((ref) => true);
 final dndEnabledProvider = StateProvider<bool>((ref) => false);
 final defaultReminderProvider = StateProvider<String>((ref) => '1 Hour Before');
+
+// ── Default Notification (notificationOnly mode) ──────────────────────────────
+final defaultNotifMusicProvider =
+    StateProvider<String>((ref) => 'alarm_clock.mp3');
+final defaultNotifVolumeProvider = StateProvider<double>((ref) => 100.0);
 
 // ─── Auth UI State ────────────────────────────────────────────────────────────
 final isLoggedInProvider = StateProvider<bool>((ref) => false);
