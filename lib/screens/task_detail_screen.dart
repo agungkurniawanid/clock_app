@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/task_model.dart';
 import '../providers/app_providers.dart';
+import '../services/audio_service.dart';
 import '../widgets/status_badge.dart';
 import '../theme/app_colors.dart';
 import 'add_task_screen.dart';
@@ -138,81 +139,44 @@ class TaskDetailScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 12),
 
-                  // Schedule
+                  // Start Date & Alarm
                   _sectionCard(
                     context,
                     card,
-                    icon: Icons.event_rounded,
-                    title: 'Schedule',
+                    icon: Icons.play_circle_outline_rounded,
+                    title: 'Start Date & Alarm',
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _detailRow(context, Icons.calendar_today_rounded,
-                            _formatDate(latestTask.date), textSecondary),
+                        _detailRow(
+                            context,
+                            Icons.calendar_today_rounded,
+                            'Start: ${_formatDate(latestTask.date)}',
+                            textSecondary),
                         const SizedBox(height: 6),
                         _detailRow(context, Icons.access_time_rounded,
-                            latestTask.timeLabel, textSecondary),
+                            'Time: ${latestTask.timeLabel}', textSecondary),
                         const SizedBox(height: 6),
                         _detailRow(context, Icons.repeat_rounded,
                             'Repeat: ${latestTask.repeatLabel}', textSecondary),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Reminders
-                  if (latestTask.reminders.isNotEmpty)
-                    _sectionCard(
-                      context,
-                      card,
-                      icon: Icons.notifications_rounded,
-                      title: 'Reminders',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: latestTask.reminders
-                            .map((r) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 6),
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.circle,
-                                          size: 6, color: primary),
-                                      const SizedBox(width: 10),
-                                      Text(r,
-                                          style: TextStyle(
-                                              color: textPrimary,
-                                              fontSize: 14)),
-                                    ],
-                                  ),
-                                ))
-                            .toList(),
-                      ),
-                    ),
-                  if (latestTask.reminders.isNotEmpty)
-                    const SizedBox(height: 12),
-
-                  // Alarm Mode
-                  _sectionCard(
-                    context,
-                    card,
-                    icon: Icons.alarm_rounded,
-                    title: 'Alarm Mode',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                        const SizedBox(height: 10),
                         _detailRow(
                           context,
                           latestTask.alarmMode == AlarmMode.alarmMusic
                               ? Icons.music_note_rounded
                               : Icons.notifications_rounded,
                           latestTask.alarmMode == AlarmMode.alarmMusic
-                              ? 'Music Alarm'
-                              : 'Notification Only',
+                              ? 'Alarm: Music'
+                              : 'Alarm: Notification Only',
                           textSecondary,
                         ),
                         if (latestTask.musicFile != null) ...[
                           const SizedBox(height: 6),
-                          _detailRow(context, Icons.audio_file_rounded,
-                              'Music: ${latestTask.musicFile}', textSecondary),
+                          _detailRow(
+                              context,
+                              Icons.audio_file_rounded,
+                              'Music: ${_cleanMusicName(latestTask.musicFile!)}',
+                              textSecondary),
                           const SizedBox(height: 6),
                           _detailRow(context, Icons.volume_up_rounded,
                               'Volume: ${latestTask.volume}%', textSecondary),
@@ -223,10 +187,124 @@ class TaskDetailScreen extends ConsumerWidget {
                               'Snooze: ${latestTask.snoozeMinutes} min',
                               textSecondary),
                         ],
+                        if (latestTask.reminders.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Icon(Icons.notifications_rounded,
+                                  size: 15, color: textSecondary),
+                              const SizedBox(width: 8),
+                              Text('Reminders:',
+                                  style: TextStyle(
+                                      color: textPrimary,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          ...latestTask.reminders.map((r) => Padding(
+                                padding:
+                                    const EdgeInsets.only(left: 23, bottom: 4),
+                                child: Row(children: [
+                                  Icon(Icons.circle, size: 5, color: primary),
+                                  const SizedBox(width: 8),
+                                  Text(r,
+                                      style: TextStyle(
+                                          color: textPrimary, fontSize: 13)),
+                                ]),
+                              )),
+                        ],
                       ],
                     ),
                   ),
                   const SizedBox(height: 12),
+
+                  // Due Date & Reminders
+                  if (latestTask.dueDateEnabled && latestTask.dueDate != null)
+                    _sectionCard(
+                      context,
+                      card,
+                      icon: Icons.flag_rounded,
+                      title: 'Due Date & Reminders',
+                      iconColor: Theme.of(context).colorScheme.secondary,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _detailRow(
+                              context,
+                              Icons.flag_rounded,
+                              'Due: ${_formatDate(latestTask.dueDate!)}',
+                              textSecondary),
+                          if (latestTask.dueTime != null) ...[
+                            const SizedBox(height: 6),
+                            _detailRow(
+                                context,
+                                Icons.access_time_rounded,
+                                'Time: ${latestTask.dueTimeLabel}',
+                                textSecondary),
+                          ],
+                          if (latestTask.dueReminderEnabled &&
+                              latestTask.dueReminders.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Icon(Icons.notifications_active_rounded,
+                                    size: 15, color: textSecondary),
+                                const SizedBox(width: 8),
+                                Text('Due Reminders:',
+                                    style: TextStyle(
+                                        color: textPrimary,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            ...latestTask.dueReminders.map((r) => Padding(
+                                  padding: const EdgeInsets.only(
+                                      left: 23, bottom: 4),
+                                  child: Row(children: [
+                                    Icon(Icons.circle,
+                                        size: 5,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .secondary),
+                                    const SizedBox(width: 8),
+                                    Text(r,
+                                        style: TextStyle(
+                                            color: textPrimary, fontSize: 13)),
+                                  ]),
+                                )),
+                            const SizedBox(height: 8),
+                            _detailRow(
+                              context,
+                              latestTask.dueAlarmMode == AlarmMode.alarmMusic
+                                  ? Icons.music_note_rounded
+                                  : Icons.notifications_rounded,
+                              latestTask.dueAlarmMode == AlarmMode.alarmMusic
+                                  ? 'Reminder Alarm: Music'
+                                  : 'Reminder Alarm: Notification Only',
+                              textSecondary,
+                            ),
+                            if (latestTask.dueMusicFile != null) ...[
+                              const SizedBox(height: 6),
+                              _detailRow(
+                                  context,
+                                  Icons.audio_file_rounded,
+                                  'Music: ${_cleanMusicName(latestTask.dueMusicFile!)}',
+                                  textSecondary),
+                              const SizedBox(height: 6),
+                              _detailRow(
+                                  context,
+                                  Icons.volume_up_rounded,
+                                  'Volume: ${latestTask.dueVolume}%',
+                                  textSecondary),
+                            ],
+                          ],
+                        ],
+                      ),
+                    ),
+                  if (latestTask.dueDateEnabled && latestTask.dueDate != null)
+                    const SizedBox(height: 12),
 
                   // History
                   if (latestTask.history.isNotEmpty)
@@ -283,8 +361,17 @@ class TaskDetailScreen extends ConsumerWidget {
                     builder: (_) => AddTaskScreen(editTask: latestTask),
                   ),
                 ),
+                style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
                 icon: const Icon(Icons.edit_rounded, size: 18),
-                label: const Text('Edit'),
+                label: const Text(
+                  'Edit',
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: false,
+                ),
               ),
             ),
             const SizedBox(width: 10),
@@ -331,7 +418,11 @@ class TaskDetailScreen extends ConsumerWidget {
   }
 
   Widget _sectionCard(BuildContext context, Color bg,
-      {required IconData icon, required String title, required Widget child}) {
+      {required IconData icon,
+      required String title,
+      required Widget child,
+      Color? iconColor}) {
+    final color = iconColor ?? Theme.of(context).colorScheme.primary;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -344,8 +435,7 @@ class TaskDetailScreen extends ConsumerWidget {
         children: [
           Row(
             children: [
-              Icon(icon,
-                  size: 18, color: Theme.of(context).colorScheme.primary),
+              Icon(icon, size: 18, color: color),
               const SizedBox(width: 8),
               Text(
                 title,
@@ -426,6 +516,15 @@ class TaskDetailScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  String _cleanMusicName(String file) {
+    return AudioService.displayName(file)
+        .replaceAll('_', ' ')
+        .replaceAll('.mp3', '')
+        .replaceAll('.m4a', '')
+        .replaceAll('.ogg', '')
+        .replaceAll('.wav', '');
   }
 
   String _formatDate(DateTime date) {

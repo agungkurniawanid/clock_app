@@ -1,0 +1,39 @@
+UI Flow & Fitur Autentikasi — Smart Alarm Task Scheduler
+
+1. Onboarding (First Install)
+
+User langsung masuk ke halaman Dashboard tanpa perlu login terlebih dahulu.
+Semua task yang dibuat sebelum login disimpan di local storage perangkat.
+2. Tab Profile (Belum Login)
+
+Menampilkan card profile dummy dengan teks "Anda belum login".
+Ketika user menekan tombol login atau card profile tersebut, diarahkan ke halaman Sign Up (Daftar Akun).
+3. Halaman Sign Up
+
+Field wajib: Nama Lengkap, Email, Password.
+Field opsional: Nomor Telepon.
+Terdapat tautan/tombol "Sudah punya akun? Login" untuk user yang sudah terdaftar.
+Setelah berhasil daftar → sistem otomatis melakukan login dan mengarahkan ke Dashboard.
+4. Halaman Login
+
+Terdapat tautan/tombol "Belum punya akun? Daftar" untuk user baru.
+Setelah berhasil login → task-task yang tersimpan di akun otomatis dimuat kembali.
+5. Setelah Login — Tab Profile / Settings
+
+Muncul badge/tombol berwarna mencolok (misalnya oranye atau merah) untuk Sync / Migrasi Task Local ke Database Cloud.
+Tombol ini muncul jika terdeteksi ada task di local storage yang belum tersinkronisasi ke akun.
+6. Form Buat Task (Belum Login)
+
+Menampilkan badge informasi di dalam form: "Task ini akan disimpan di penyimpanan lokal perangkat."
+Terdapat tombol "Login untuk menyimpan ke akun" yang mengarahkan ke halaman Login/Sign Up.
+7. Skenario Uninstall → Reinstall
+
+Kondisi	Perilaku Sistem
+User belum login, uninstall → install ulang	Local storage terhapus, mulai dari awal
+User sudah login, uninstall → install ulang, langsung login	Task dari akun cloud otomatis dimuat kembali
+User sudah login, uninstall → install ulang, buat task dulu (local) → baru login	Task local tetap ada + muncul tombol mencolok Sync/Migrasi untuk memindahkan task local ke akun cloud
+8. Logika Sinkronisasi Task
+
+Jika ada task di local storage saat user login → task local tidak dihapus, melainkan tetap tampil.
+Tombol Sync/Migrasi memungkinkan user memindahkan task local tersebut ke database cloud secara manual.
+Setelah migrasi berhasil → local storage untuk task tersebut dibersihkan.

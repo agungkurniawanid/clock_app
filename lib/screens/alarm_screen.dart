@@ -1,9 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/task_model.dart';
 import '../providers/app_providers.dart';
+import '../services/audio_service.dart';
+import '../services/notification_service.dart';
 import '../theme/app_colors.dart';
+import 'task_detail_screen.dart';
 
 class AlarmScreen extends ConsumerStatefulWidget {
   const AlarmScreen({super.key});
@@ -17,12 +22,12 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
   late AnimationController _bgCtrl;
   late AnimationController _pulseCtrl;
   late Animation<double> _pulseAnim;
+  late Timer _clockTimer;
   double _sliderValue = 0.0;
 
   @override
   void initState() {
     super.initState();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
     _bgCtrl = AnimationController(
       vsync: this,
@@ -37,246 +42,365 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
     _pulseAnim = Tween<double>(begin: 0.95, end: 1.05).animate(
       CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
     );
+
+    // Refresh clock every second
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+
+    // Start audio after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startAudio());
+  }
+
+  void _startAudio() {
+    final tasks = ref.read(taskListProvider);
+    final taskId = ref.read(activeAlarmTaskIdProvider);
+    if (tasks.isEmpty) return;
+
+    final task = taskId != null
+        ? tasks.firstWhere((t) => t.id == taskId, orElse: () => tasks.first)
+        : tasks.first;
+
+    if (task.alarmMode == AlarmMode.alarmMusic) {
+      final vol = (task.volume / 100.0).clamp(0.0, 1.0);
+      final file = task.musicFile ?? AudioService.defaultAlarm;
+      AudioService.instance.playAsset(file, volume: vol);
+    }
   }
 
   @override
   void dispose() {
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _bgCtrl.dispose();
     _pulseCtrl.dispose();
+    _clockTimer.cancel();
     super.dispose();
   }
 
-  void _stopAlarm() {
+  Future<void> _stopAlarm() async {
+    final tasks = ref.read(taskListProvider);
+    final taskId = ref.read(activeAlarmTaskIdProvider);
+    TaskModel? task;
+    if (taskId != null) {
+      final matched = tasks.where((t) => t.id == taskId).toList();
+      if (matched.isNotEmpty) task = matched.first;
+    }
+
+    await AudioService.instance.stop();
     ref.read(alarmActiveProvider.notifier).state = false;
-    Navigator.pop(context);
+    if (mounted) {
+      if (task != null) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => TaskDetailScreen(task: task!)),
+        );
+      } else {
+        Navigator.pop(context);
+      }
+    }
   }
 
-  void _stopAndComplete() {
+  Future<void> _stopAndComplete() async {
     final taskId = ref.read(activeAlarmTaskIdProvider);
     if (taskId != null) {
       ref.read(taskListProvider.notifier).markComplete(taskId);
     }
-    _stopAlarm();
+    await _stopAlarm();
+  }
+
+  Future<void> _snooze(int minutes) async {
+    await AudioService.instance.stop();
+    final taskId = ref.read(activeAlarmTaskIdProvider);
+    if (taskId != null) {
+      final tasks = ref.read(taskListProvider);
+      final task =
+          tasks.firstWhere((t) => t.id == taskId, orElse: () => tasks.first);
+      await NotificationService.snoozeAlarm(task, minutes);
+    }
+    ref.read(alarmActiveProvider.notifier).state = false;
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Alarm snoozed for $minutes minutes'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      Navigator.pop(context);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final tasks = ref.watch(taskListProvider);
     final taskId = ref.watch(activeAlarmTaskIdProvider);
-    final task =
-        tasks.firstWhere((t) => t.id == taskId, orElse: () => tasks.first);
+    final task = tasks.isNotEmpty
+        ? (taskId != null
+            ? tasks.firstWhere((t) => t.id == taskId, orElse: () => tasks.first)
+            : tasks.first)
+        : null;
 
-    return Scaffold(
-      body: AnimatedBuilder(
-        animation: _bgCtrl,
-        builder: (_, __) {
-          final t = _bgCtrl.value;
-          return Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color.lerp(
-                      const Color(0xFF1A0E3F), const Color(0xFF0E1A3F), t)!,
-                  Color.lerp(
-                      const Color(0xFF2D1B6E), const Color(0xFF1B2D6E), t)!,
-                ],
-              ),
-            ),
-            child: Stack(
-              children: [
-                // Decorative circles
-                ..._buildCircles(),
-                // Content
-                SafeArea(
-                  child: Column(
-                    children: [
-                      const Spacer(flex: 1),
-                      // Music info
-                      Text(
-                        '🎵  ${task.musicFile ?? 'lofi_morning.mp3'} playing...',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.7),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      // Date
-                      Text(
-                        _formatDate(task.date),
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.6),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const Spacer(flex: 1),
-                      // Big clock
-                      AnimatedBuilder(
-                        animation: _pulseAnim,
-                        builder: (_, __) => Transform.scale(
-                          scale: _pulseAnim.value,
-                          child: _buildClock(context),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      // Task name
-                      Text(
-                        task.title,
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.nunito(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '"${task.description}"',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.65),
-                          fontSize: 13,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                      const Spacer(flex: 1),
-                      // Divider
-                      Divider(color: Colors.white.withValues(alpha: 0.15)),
-                      const SizedBox(height: 16),
-                      // Swipe slider
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: Container(
-                          height: 56,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(30),
-                            border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.2),
-                                width: 1),
-                          ),
-                          child: SliderTheme(
-                            data: SliderTheme.of(context).copyWith(
-                              trackHeight: 0,
-                              thumbColor: Colors.white,
-                              activeTrackColor: Colors.transparent,
-                              inactiveTrackColor: Colors.transparent,
-                              overlayColor: Colors.transparent,
-                              thumbShape: const RoundSliderThumbShape(
-                                  enabledThumbRadius: 20),
-                            ),
-                            child: Slider(
-                              value: _sliderValue,
-                              onChanged: (v) =>
-                                  setState(() => _sliderValue = v),
-                              onChangeEnd: (v) {
-                                if (v > 0.9) {
-                                  _stopAlarm();
-                                } else {
-                                  setState(() => _sliderValue = 0);
-                                }
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Slide to dismiss alarm',
-                        style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.5),
-                            fontSize: 12),
-                      ),
-                      const SizedBox(height: 24),
-                      // Action buttons
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: _stopAndComplete,
-                                icon: const Icon(Icons.check_circle_rounded,
-                                    size: 18),
-                                label: const Text('Stop & Complete'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: statusCompleted,
-                                  foregroundColor: Colors.white,
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14)),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: _stopAlarm,
-                                icon: const Icon(Icons.stop_rounded, size: 18),
-                                label: const Text('Stop Only'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.white,
-                                  side: BorderSide(
-                                      color:
-                                          Colors.white.withValues(alpha: 0.4)),
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14)),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      // Snooze
-                      GestureDetector(
-                        onTap: () => _showSnoozeSheet(context),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 32, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: statusRisk.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                                color: statusRisk.withValues(alpha: 0.4),
-                                width: 1),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.snooze_rounded,
-                                  color: Colors.white, size: 18),
-                              const SizedBox(width: 8),
-                              const Text(
-                                'Snooze 15 min',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14),
-                              ),
-                              const SizedBox(width: 8),
-                              Icon(Icons.settings_rounded,
-                                  color: Colors.white.withValues(alpha: 0.6),
-                                  size: 16),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const Spacer(flex: 1),
+    final soundName = task?.alarmMode == AlarmMode.alarmMusic
+        ? AudioService.displayName(task?.musicFile ?? AudioService.defaultAlarm)
+            .replaceAll('_', ' ')
+            .replaceAll(
+                RegExp(r'\.(mp3|m4a|ogg|wav|flac)$', caseSensitive: false), '')
+        : 'Notification only';
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.light,
+        systemNavigationBarDividerColor: Colors.transparent,
+      ),
+      child: PopScope(
+        canPop: false,
+        child: Scaffold(
+          body: AnimatedBuilder(
+            animation: _bgCtrl,
+            builder: (_, __) {
+              final t = _bgCtrl.value;
+              return Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color.lerp(
+                          const Color(0xFF1A0E3F), const Color(0xFF0E1A3F), t)!,
+                      Color.lerp(
+                          const Color(0xFF2D1B6E), const Color(0xFF1B2D6E), t)!,
                     ],
                   ),
                 ),
-              ],
-            ),
-          );
-        },
+                child: Stack(
+                  children: [
+                    ..._buildCircles(),
+                    SafeArea(
+                      child: Column(
+                        children: [
+                          const Spacer(flex: 1),
+                          // Sound name
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 32),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  task?.alarmMode == AlarmMode.alarmMusic
+                                      ? Icons.music_note_rounded
+                                      : Icons.notifications_rounded,
+                                  color: Colors.white54,
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    soundName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.7),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          // Date
+                          Text(
+                            task != null ? _formatDate(task.date) : '',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const Spacer(flex: 1),
+                          // Big live clock
+                          AnimatedBuilder(
+                            animation: _pulseAnim,
+                            builder: (_, __) => Transform.scale(
+                              scale: _pulseAnim.value,
+                              child: _buildClock(),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          // Task name
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Text(
+                              task?.title ?? '',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.nunito(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          if (task?.description.isNotEmpty == true)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 32),
+                              child: Text(
+                                '"${task!.description}"',
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.65),
+                                  fontSize: 13,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+                          const Spacer(flex: 1),
+                          Divider(color: Colors.white.withValues(alpha: 0.15)),
+                          const SizedBox(height: 16),
+                          // Slide to dismiss
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 32),
+                            child: Container(
+                              height: 56,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(30),
+                                border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    width: 1),
+                              ),
+                              child: SliderTheme(
+                                data: SliderTheme.of(context).copyWith(
+                                  trackHeight: 0,
+                                  thumbColor: Colors.white,
+                                  activeTrackColor: Colors.transparent,
+                                  inactiveTrackColor: Colors.transparent,
+                                  overlayColor: Colors.transparent,
+                                  thumbShape: const RoundSliderThumbShape(
+                                      enabledThumbRadius: 20),
+                                ),
+                                child: Slider(
+                                  value: _sliderValue,
+                                  onChanged: (v) =>
+                                      setState(() => _sliderValue = v),
+                                  onChangeEnd: (v) {
+                                    if (v > 0.9) {
+                                      _stopAlarm();
+                                    } else {
+                                      setState(() => _sliderValue = 0);
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Slide to dismiss alarm',
+                            style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.5),
+                                fontSize: 12),
+                          ),
+                          const SizedBox(height: 24),
+                          // Action buttons
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: _stopAndComplete,
+                                    icon: const Icon(Icons.check_circle_rounded,
+                                        size: 18),
+                                    label: const Text('Stop & Complete'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: statusCompleted,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 14),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(14)),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: _stopAlarm,
+                                    icon: const Icon(Icons.stop_rounded,
+                                        size: 18),
+                                    label: const Text('Stop Only'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.white,
+                                      side: BorderSide(
+                                          color: Colors.white
+                                              .withValues(alpha: 0.4)),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 14),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(14)),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // Snooze
+                          GestureDetector(
+                            onTap: () => _showSnoozeSheet(context),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 32, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: statusRisk.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                    color: statusRisk.withValues(alpha: 0.4),
+                                    width: 1),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.snooze_rounded,
+                                      color: Colors.white, size: 18),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Snooze ${task?.snoozeMinutes ?? 15} min',
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(Icons.settings_rounded,
+                                      color:
+                                          Colors.white.withValues(alpha: 0.6),
+                                      size: 16),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const Spacer(flex: 1),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -316,7 +440,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
     ];
   }
 
-  Widget _buildClock(BuildContext context) {
+  Widget _buildClock() {
     final now = DateTime.now();
     final h = now.hour.toString().padLeft(2, '0');
     final m = now.minute.toString().padLeft(2, '0');
@@ -378,8 +502,17 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
               Text(
-                'Custom Snooze Duration',
+                'Snooze Duration',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700, color: Colors.white),
               ),
@@ -413,8 +546,11 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Confirm Snooze'),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _snooze(selected);
+                  },
+                  child: Text('Snooze $selected Minutes'),
                 ),
               ),
             ],

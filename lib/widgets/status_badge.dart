@@ -10,8 +10,12 @@ class StatusBadge extends StatelessWidget {
 
   Color get _color {
     switch (status) {
+      case TaskStatus.upcoming:
+        return statusUpcoming;
       case TaskStatus.todo:
         return statusTodo;
+      case TaskStatus.inProgress:
+        return statusInProgress;
       case TaskStatus.risk:
         return statusRisk;
       case TaskStatus.overdue:
@@ -23,8 +27,12 @@ class StatusBadge extends StatelessWidget {
 
   String get _label {
     switch (status) {
+      case TaskStatus.upcoming:
+        return 'Upcoming';
       case TaskStatus.todo:
         return 'Todo';
+      case TaskStatus.inProgress:
+        return 'In Progress';
       case TaskStatus.risk:
         return 'At Risk';
       case TaskStatus.overdue:

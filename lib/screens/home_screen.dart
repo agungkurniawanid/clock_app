@@ -10,6 +10,7 @@ import '../models/task_model.dart';
 import 'task_detail_screen.dart';
 import 'add_task_screen.dart';
 import 'alarm_screen.dart';
+import 'signup_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -22,96 +23,105 @@ class HomeScreen extends ConsumerWidget {
     final todayTasks = ref.watch(todayTasksProvider);
 
     final upcomingTasks = tasks
-        .where(
-            (t) => t.status == TaskStatus.todo || t.status == TaskStatus.risk)
+        .where((t) =>
+            t.status == TaskStatus.upcoming ||
+            t.status == TaskStatus.todo ||
+            t.status == TaskStatus.risk)
         .take(5)
         .toList();
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(child: _buildHeader(context, isDark)),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Clock
-                  _buildClockCard(context, isDark),
-                  const SizedBox(height: 20),
-                  // Summary Grid
-                  _buildSummaryGrid(context, summary),
-                  const SizedBox(height: 20),
-                  // Alarm Banner
-                  _buildAlarmBanner(context, ref, tasks),
-                  const SizedBox(height: 24),
-                  // Today's Schedule
-                  SectionHeader(
-                    title: "Today's Schedule",
-                    onSeeAll: () =>
-                        ref.read(navIndexProvider.notifier).state = 1,
-                  ),
-                  const SizedBox(height: 12),
-                ],
-              ),
-            ),
-          ),
-          // Horizontal scroll tasks
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 180,
-              child: todayTasks.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Center(
-                        child: Text(
-                          'No tasks scheduled for today 🎉',
-                          style: Theme.of(context).textTheme.bodyMedium,
+      body: Column(
+        children: [
+          // Header fixed at top — covers the status bar area so content
+          // scrolling up is clipped by the Column layout boundary here.
+          _buildHeader(context, isDark),
+          Expanded(
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Clock
+                        _buildClockCard(context, isDark),
+                        // Summary Grid
+                        _buildSummaryGrid(context, summary, ref),
+                        const SizedBox(height: 20),
+                        // Alarm Banner
+                        _buildAlarmBanner(context, ref, tasks),
+                        const SizedBox(height: 24),
+                        // Today's Schedule
+                        SectionHeader(
+                          title: "Today's Schedule",
+                          onSeeAll: () =>
+                              ref.read(navIndexProvider.notifier).state = 1,
                         ),
-                      ),
-                    )
-                  : ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      itemCount: todayTasks.length,
-                      itemBuilder: (ctx, i) => TaskCard(
-                        task: todayTasks[i],
-                        horizontal: true,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) =>
-                                  TaskDetailScreen(task: todayTasks[i])),
-                        ),
-                      ),
+                        const SizedBox(height: 12),
+                      ],
                     ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 24),
-                  SectionHeader(
-                    title: 'Upcoming This Week',
-                    onSeeAll: () =>
-                        ref.read(navIndexProvider.notifier).state = 1,
                   ),
-                  const SizedBox(height: 12),
-                  ...upcomingTasks.map((t) => TaskCard(
-                        task: t,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => TaskDetailScreen(task: t)),
+                ),
+                // Horizontal scroll tasks
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 180,
+                    child: todayTasks.isEmpty
+                        ? Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Center(
+                              child: Text(
+                                'No tasks scheduled for today 🎉',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            itemCount: todayTasks.length,
+                            itemBuilder: (ctx, i) => TaskCard(
+                              task: todayTasks[i],
+                              horizontal: true,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) =>
+                                        TaskDetailScreen(task: todayTasks[i])),
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 24),
+                        SectionHeader(
+                          title: 'Upcoming This Week',
+                          onSeeAll: () =>
+                              ref.read(navIndexProvider.notifier).state = 1,
                         ),
-                      )),
-                  const SizedBox(height: 100),
-                ],
-              ),
+                        const SizedBox(height: 12),
+                        ...upcomingTasks.map((t) => TaskCard(
+                              task: t,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => TaskDetailScreen(task: t)),
+                              ),
+                            )),
+                        const SizedBox(height: 100),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -197,18 +207,50 @@ class HomeScreen extends ConsumerWidget {
           Row(
             children: [
               IconButton(
-                onPressed: () {},
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20)),
+                      title: Row(
+                        children: [
+                          Icon(Icons.notifications_none_rounded,
+                              color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(width: 10),
+                          const Text('Notifikasi'),
+                        ],
+                      ),
+                      content: const Text(
+                        'Fitur notifikasi masih dalam tahap pengembangan. '
+                        'Nantikan pembaruan berikutnya!',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Oke, Mengerti'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
                 icon: Icon(
                   Icons.notifications_none_rounded,
                   color: Theme.of(context).textTheme.bodyLarge?.color,
                   size: 26,
                 ),
               ),
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: darkPrimary.withValues(alpha: 0.2),
-                child: const Icon(Icons.person_rounded,
-                    color: darkPrimary, size: 22),
+              GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SignUpScreen()),
+                ),
+                child: CircleAvatar(
+                  radius: 20,
+                  backgroundColor: darkPrimary.withValues(alpha: 0.2),
+                  child: const Icon(Icons.person_rounded,
+                      color: darkPrimary, size: 22),
+                ),
               ),
             ],
           ),
@@ -239,16 +281,17 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSummaryGrid(BuildContext context, Map<String, int> summary) {
+  Widget _buildSummaryGrid(
+      BuildContext context, Map<String, int> summary, WidgetRef ref) {
     final cards = [
       _SummaryCard('Total Tasks', '${summary['total']}', Icons.task_alt_rounded,
-          darkPrimary),
+          darkPrimary, 0),
       _SummaryCard('Upcoming', '${summary['upcoming']}', Icons.event_rounded,
-          darkSecondary),
+          darkSecondary, 2),
       _SummaryCard('Overdue', '${summary['overdue']}', Icons.warning_rounded,
-          statusOverdue),
+          statusOverdue, 4),
       _SummaryCard('Completed', '${summary['completed']}',
-          Icons.check_circle_rounded, statusCompleted),
+          Icons.check_circle_rounded, statusCompleted, 5),
     ];
 
     return GridView.count(
@@ -257,62 +300,101 @@ class HomeScreen extends ConsumerWidget {
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 12,
       mainAxisSpacing: 12,
-      childAspectRatio: 1.6,
-      children: cards.map((c) => _buildSummaryCardWidget(context, c)).toList(),
+      childAspectRatio: 1.4,
+      children:
+          cards.map((c) => _buildSummaryCardWidget(context, c, ref)).toList(),
     );
   }
 
-  Widget _buildSummaryCardWidget(BuildContext context, _SummaryCard card) {
+  Widget _buildSummaryCardWidget(
+      BuildContext context, _SummaryCard card, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? darkCard : lightCard,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: card.color.withValues(alpha: 0.1),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: card.color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(card.icon, color: card.color, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  card.value,
-                  style: GoogleFonts.nunito(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: card.color,
-                    height: 1,
-                  ),
+    return GestureDetector(
+      onTap: () {
+        ref.read(taskTabIndexProvider.notifier).state = card.tabIndex;
+        ref.read(navIndexProvider.notifier).state = 1;
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? darkCard : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: isDark
+              ? null
+              : Border.all(
+                  color: card.color.withValues(alpha: 0.25),
+                  width: 1.5,
                 ),
-                Text(
-                  card.label,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(fontSize: 12),
-                ),
-              ],
+          boxShadow: [
+            BoxShadow(
+              color: isDark
+                  ? card.color.withValues(alpha: 0.1)
+                  : card.color.withValues(alpha: 0.15),
+              blurRadius: isDark ? 12 : 16,
+              offset: const Offset(0, 4),
             ),
           ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: card.color.withValues(alpha: isDark ? 0.15 : 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(card.icon, color: card.color, size: 22),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      card.value,
+                      style: GoogleFonts.nunito(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: card.color,
+                        height: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      card.label,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(fontSize: 11),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Lihat Lengkap',
+                          style: GoogleFonts.nunito(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: card.color.withValues(alpha: 0.8),
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 9,
+                          color: card.color.withValues(alpha: 0.8),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -320,16 +402,20 @@ class HomeScreen extends ConsumerWidget {
 
   Widget _buildAlarmBanner(
       BuildContext context, WidgetRef ref, List<TaskModel> tasks) {
+    if (tasks.isEmpty) return const SizedBox.shrink();
+
     final nextTask = tasks.firstWhere(
       (t) => t.status == TaskStatus.todo,
       orElse: () => tasks.first,
     );
 
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const AlarmScreen()),
-      ),
+      onTap: () {
+        ref.read(activeAlarmTaskIdProvider.notifier).state = nextTask.id;
+        ref.read(alarmActiveProvider.notifier).state = true;
+        Navigator.push(
+            context, MaterialPageRoute(builder: (_) => const AlarmScreen()));
+      },
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -439,5 +525,7 @@ class _SummaryCard {
   final String value;
   final IconData icon;
   final Color color;
-  const _SummaryCard(this.label, this.value, this.icon, this.color);
+  final int tabIndex;
+  const _SummaryCard(
+      this.label, this.value, this.icon, this.color, this.tabIndex);
 }

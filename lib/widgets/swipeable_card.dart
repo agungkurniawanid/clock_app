@@ -45,10 +45,10 @@ class _SwipeableCardState extends State<SwipeableCard> {
         ),
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.only(left: 24),
-        child: Row(
+        child: const Row(
           children: [
             Icon(Icons.check_circle_rounded, color: statusCompleted, size: 26),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             Text(
               'Complete',
               style: TextStyle(
@@ -68,7 +68,7 @@ class _SwipeableCardState extends State<SwipeableCard> {
         ),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 24),
-        child: Row(
+        child: const Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
             Text(
@@ -79,7 +79,7 @@ class _SwipeableCardState extends State<SwipeableCard> {
                 fontSize: 14,
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             Icon(Icons.delete_rounded, color: statusOverdue, size: 26),
           ],
         ),

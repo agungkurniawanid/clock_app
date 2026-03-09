@@ -42,7 +42,8 @@ class TaskCard extends StatelessWidget {
     final cardBg = isDark ? darkCard : lightCard;
     final textPrimary = Theme.of(context).textTheme.bodyLarge?.color;
     final textSecondary = Theme.of(context).textTheme.bodyMedium?.color;
-    final isOngoing = task.status == TaskStatus.todo;
+    final isOngoing =
+        task.status == TaskStatus.todo || task.status == TaskStatus.inProgress;
 
     return GestureDetector(
       onTap: onTap,

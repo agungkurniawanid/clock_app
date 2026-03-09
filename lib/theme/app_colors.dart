@@ -21,7 +21,9 @@ const Color lightTextPrimary = Color(0xFF1A1A2E);
 const Color lightTextSecondary = Color(0xFF666688);
 
 // ─── Status Colors ───────────────────────────────────────────────────────────
+const Color statusUpcoming = Color(0xFF4ECDC4);
 const Color statusTodo = Color(0xFF4A90E2);
+const Color statusInProgress = Color(0xFF7B6EF6);
 const Color statusRisk = Color(0xFFF5A623);
 const Color statusOverdue = Color(0xFFE53E3E);
 const Color statusCompleted = Color(0xFF38A169);

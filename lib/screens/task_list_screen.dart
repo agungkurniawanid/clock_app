@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/task_model.dart';
 import '../providers/app_providers.dart';
 import '../widgets/swipeable_card.dart';
 import '../widgets/empty_state_widget.dart';
 import 'add_task_screen.dart';
 import 'task_detail_screen.dart';
 
-const _tabs = ['All', 'Upcoming', 'Risk', 'Overdue', 'Done'];
+const _tabs = ['All', 'In Progress', 'Upcoming', 'Risk', 'Overdue', 'Done'];
 
 class TaskListScreen extends ConsumerWidget {
   const TaskListScreen({super.key});
@@ -27,7 +28,7 @@ class TaskListScreen extends ConsumerWidget {
           ),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(100),
+          preferredSize: const Size.fromHeight(148),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Column(
@@ -90,6 +91,9 @@ class TaskListScreen extends ConsumerWidget {
                     },
                   ),
                 ),
+                const SizedBox(height: 8),
+                // Priority Sort Chips
+                const _PrioritySortBar(),
               ],
             ),
           ),
@@ -98,8 +102,8 @@ class TaskListScreen extends ConsumerWidget {
       body: filteredTasks.isEmpty
           ? EmptyStateWidget(
               icon: Icons.event_busy_rounded,
-              title: tabIndex == 2 ? 'No At-Risk Tasks' : 'Nothing Here',
-              subtitle: tabIndex == 2
+              title: tabIndex == 3 ? 'No At-Risk Tasks' : 'Nothing Here',
+              subtitle: tabIndex == 3
                   ? 'Great! You have no tasks at risk right now.'
                   : 'Add a new schedule to get started.',
               onAction: () => Navigator.push(
@@ -149,6 +153,120 @@ class TaskListScreen extends ConsumerWidget {
   }
 }
 
+class _PrioritySortBar extends ConsumerWidget {
+  const _PrioritySortBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(taskPriorityFilterProvider);
+    final sortAsc = ref.watch(taskSortAscendingProvider);
+    final options = <String, TaskPriority?>{
+      'All': null,
+      'Low': TaskPriority.low,
+      'Medium': TaskPriority.medium,
+      'High': TaskPriority.high,
+    };
+
+    return SizedBox(
+      height: 30,
+      child: Row(
+        children: [
+          const Icon(Icons.sort_rounded, size: 16, color: Colors.grey),
+          const SizedBox(width: 6),
+          Expanded(
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: options.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              itemBuilder: (ctx, i) {
+                final label = options.keys.elementAt(i);
+                final value = options.values.elementAt(i);
+                final active = selected == value;
+                Color chipColor;
+                if (!active) {
+                  chipColor = Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.1);
+                } else if (value == TaskPriority.high) {
+                  chipColor = const Color(0xFFE53E3E);
+                } else if (value == TaskPriority.medium) {
+                  chipColor = const Color(0xFFDD6B20);
+                } else if (value == TaskPriority.low) {
+                  chipColor = const Color(0xFF38A169);
+                } else {
+                  chipColor = Theme.of(context).colorScheme.primary;
+                }
+                return GestureDetector(
+                  onTap: () => ref
+                      .read(taskPriorityFilterProvider.notifier)
+                      .state = value,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: chipColor,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: active
+                            ? Colors.white
+                            : Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: () =>
+                ref.read(taskSortAscendingProvider.notifier).state = !sortAsc,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: Theme.of(context)
+                    .colorScheme
+                    .primary
+                    .withValues(alpha: sortAsc ? 1.0 : 0.85),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    sortAsc
+                        ? Icons.arrow_upward_rounded
+                        : Icons.arrow_downward_rounded,
+                    size: 12,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Date',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _FilterSheet extends ConsumerStatefulWidget {
   @override
   ConsumerState<_FilterSheet> createState() => _FilterSheetState();
@@ -180,7 +298,7 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
           _filterSection(
               context,
               'Status',
-              ['All', 'Todo', 'At Risk', 'Overdue', 'Done'],
+              ['All', 'In Progress', 'Todo', 'At Risk', 'Overdue', 'Done'],
               _selectedStatus,
               (v) => setState(() => _selectedStatus = v)),
           const SizedBox(height: 16),
