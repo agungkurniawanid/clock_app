@@ -66,9 +66,8 @@ void main() async {
   NotificationService.defaultNotifVolume = savedNotifVolume / 100.0;
   NotificationService.defaultReminder = savedRemind;
 
-  // Init notification service
+  // Init notification service (channels only — permissions requested after runApp)
   await NotificationService.init();
-  await NotificationService.requestPermissions();
 
   runApp(
     ProviderScope(
@@ -114,7 +113,7 @@ class SmartAlarmApp extends ConsumerWidget {
         _accentColors[accentIndex.clamp(0, _accentColors.length - 1)];
 
     return MaterialApp(
-      title: 'Smart Alarm & Task Scheduler',
+      title: 'Alarm Scheduler',
       debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
       themeMode: themeMode,
@@ -167,6 +166,13 @@ class _AppEntryState extends ConsumerState<_AppEntry> {
     // Check if app was launched via a notification
     NotificationService.checkLaunchPayload();
 
+    // Request notification permissions after UI is rendered
+    // (prevents blank white screen during permission dialogs)
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future.delayed(const Duration(milliseconds: 500));
+      NotificationService.requestPermissions();
+    });
+
     // Foreground alarm checker — fires every 5 s.
     // When the scheduled time arrives while the app is in the foreground,
     // flutter_local_notifications won't open AlarmScreen automatically,
@@ -191,7 +197,7 @@ class _AppEntryState extends ConsumerState<_AppEntry> {
       // karena notificationOnly cukup via notifikasi sistem.
       if (task.alarmMode != AlarmMode.alarmMusic) continue;
 
-      final alarmDt = DateTime(
+      final taskDt = DateTime(
         task.date.year,
         task.date.month,
         task.date.day,
@@ -199,27 +205,91 @@ class _AppEntryState extends ConsumerState<_AppEntry> {
         task.time.minute,
       );
 
-      // Key to avoid re-triggering the same alarm minute
-      final key = '${task.id}_${alarmDt.millisecondsSinceEpoch}';
-      if (_firedForeground.contains(key)) continue;
+      // ── 1. Main alarm (start time) ─────────────────────────────────────
+      final mainKey = '${task.id}_${taskDt.millisecondsSinceEpoch}';
+      if (!_firedForeground.contains(mainKey)) {
+        final diff = now.difference(taskDt).inSeconds;
+        if (diff >= 0 && diff <= 90) {
+          _firedForeground.add(mainKey);
+          ref.read(taskListProvider.notifier).markInProgress(task.id);
+          NotificationService.cancelAlarmOnly(task.id);
+          ref.read(activeAlarmTaskIdProvider.notifier).state = task.id;
+          ref.read(alarmActiveProvider.notifier).state = true;
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(
+              fullscreenDialog: true,
+              builder: (_) => const AlarmScreen(),
+            ),
+          );
+          return; // show one at a time
+        }
+      }
 
-      final diff = now.difference(alarmDt).inSeconds;
-      // Trigger if task alarm fired within the last 90 seconds
-      if (diff >= 0 && diff <= 90) {
-        _firedForeground.add(key);
-        ref.read(taskListProvider.notifier).markInProgress(task.id);
-        // Cancel notification sound before AlarmScreen opens to prevent
-        // the notification audio overlapping with in-app alarm audio.
-        NotificationService.cancelAlarmOnly(task.id);
-        ref.read(activeAlarmTaskIdProvider.notifier).state = task.id;
-        ref.read(alarmActiveProvider.notifier).state = true;
-        navigatorKey.currentState?.push(
-          MaterialPageRoute(
-            fullscreenDialog: true,
-            builder: (_) => const AlarmScreen(),
-          ),
+      // ── 2. Start-time reminders ────────────────────────────────────────
+      final startReminders = task.reminders.isNotEmpty
+          ? task.reminders
+          : [NotificationService.defaultReminder];
+      bool fired = false;
+      for (int i = 0; i < startReminders.length; i++) {
+        final mins = NotificationService.reminderMinutes(startReminders[i]);
+        if (mins == null) continue;
+        final reminderDt = taskDt.subtract(Duration(minutes: mins));
+        if (reminderDt.isBefore(DateTime(2000))) continue;
+        final reminderKey =
+            '${task.id}_r${i}_${reminderDt.millisecondsSinceEpoch}';
+        if (_firedForeground.contains(reminderKey)) continue;
+        final diff = now.difference(reminderDt).inSeconds;
+        if (diff >= 0 && diff <= 90) {
+          _firedForeground.add(reminderKey);
+          ref.read(activeAlarmTaskIdProvider.notifier).state = task.id;
+          ref.read(alarmActiveProvider.notifier).state = true;
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(
+              fullscreenDialog: true,
+              builder: (_) => const AlarmScreen(),
+            ),
+          );
+          fired = true;
+          break;
+        }
+      }
+      if (fired) return;
+
+      // ── 3. Due-date reminders ─────────────────────────────────────────
+      if (task.dueDateEnabled &&
+          task.dueDate != null &&
+          task.dueReminderEnabled &&
+          task.dueReminders.isNotEmpty) {
+        final dTime = task.dueTime;
+        final dueDt = DateTime(
+          task.dueDate!.year,
+          task.dueDate!.month,
+          task.dueDate!.day,
+          dTime?.hour ?? 23,
+          dTime?.minute ?? 59,
         );
-        break; // show one at a time
+        for (int i = 0; i < task.dueReminders.length; i++) {
+          final mins =
+              NotificationService.reminderMinutes(task.dueReminders[i]);
+          if (mins == null) continue;
+          final reminderDt = dueDt.subtract(Duration(minutes: mins));
+          final reminderKey =
+              '${task.id}_dr${i}_${reminderDt.millisecondsSinceEpoch}';
+          if (_firedForeground.contains(reminderKey)) continue;
+          final diff = now.difference(reminderDt).inSeconds;
+          if (diff >= 0 && diff <= 90) {
+            _firedForeground.add(reminderKey);
+            ref.read(activeAlarmTaskIdProvider.notifier).state = task.id;
+            ref.read(alarmActiveProvider.notifier).state = true;
+            navigatorKey.currentState?.push(
+              MaterialPageRoute(
+                fullscreenDialog: true,
+                builder: (_) => const AlarmScreen(),
+              ),
+            );
+            return;
+          }
+        }
       }
     }
   }

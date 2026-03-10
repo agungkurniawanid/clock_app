@@ -59,6 +59,13 @@ final List<MusicModel> dummyMusic = [
     category: MusicCategory.energetic,
     isFavorite: false,
   ),
+  const MusicModel(
+    id: 'm9',
+    fileName: 'mixkit-happy-bells-notification-937.mp3',
+    duration: '0:05',
+    category: MusicCategory.calm,
+    isFavorite: true,
+  ),
 ];
 
 // ─── Reminder Options ─────────────────────────────────────────────────────────

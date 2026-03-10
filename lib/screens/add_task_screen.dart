@@ -49,6 +49,7 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
   List<ChecklistItem> _checklist = [];
   List<SubTask> _subTasks = [];
   final Map<String, TextEditingController> _controllers = {};
+  bool _autoCompleteOnChecklist = false;
 
   // ── Get or create a TextEditingController keyed by item ID ────────────────
   TextEditingController _ctrl(String id, [String initial = '']) =>
@@ -66,6 +67,7 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
       _descCtrl.text = t.description;
       _checklist = List.from(t.checklist);
       _subTasks = List.from(t.subTasks);
+      _autoCompleteOnChecklist = t.autoCompleteOnChecklist;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final n = ref.read(addTaskFormProvider.notifier);
         n.setTitle(t.title);
@@ -487,6 +489,7 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
       history: widget.editTask?.history ?? [],
       checklist: syncedChecklist,
       subTasks: syncedSubTasks,
+      autoCompleteOnChecklist: _autoCompleteOnChecklist,
     );
     if (widget.editTask != null) {
       ref.read(taskListProvider.notifier).updateTask(newTask);
@@ -650,6 +653,12 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
             _subTasks.add(SubTask(id: _uid(), title: ''));
           });
         }, primary),
+
+        // ── Auto-complete toggle ────────────────────────────────────────
+        if (_checklist.isNotEmpty || _subTasks.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _buildAutoCompleteToggle(context, primary, textSecondary),
+        ],
       ],
     );
   }
@@ -724,13 +733,13 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
                     Row(
                       children: [
                         Icon(Icons.checklist_rounded,
-                            size: 13, color: textSecondary),
+                            size: 15, color: textSecondary),
                         const SizedBox(width: 6),
                         Text('Checklist',
                             style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 13,
                                 color: textSecondary,
-                                fontWeight: FontWeight.w600)),
+                                fontWeight: FontWeight.w700)),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -786,13 +795,13 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
                   Row(
                     children: [
                       Icon(Icons.account_tree_rounded,
-                          size: 13, color: textSecondary),
+                          size: 15, color: textSecondary),
                       const SizedBox(width: 6),
                       Text('Sub-tasks',
                           style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 13,
                               color: textSecondary,
-                              fontWeight: FontWeight.w600)),
+                              fontWeight: FontWeight.w700)),
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -824,16 +833,111 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
     );
   }
 
+  Widget _buildAutoCompleteToggle(
+      BuildContext context, Color primary, Color? textSecondary) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textPrimary = Theme.of(context).textTheme.bodyLarge?.color;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: _autoCompleteOnChecklist
+            ? primary.withValues(alpha: 0.1)
+            : (isDark
+                ? Colors.white.withValues(alpha: 0.04)
+                : Colors.black.withValues(alpha: 0.03)),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _autoCompleteOnChecklist
+              ? primary.withValues(alpha: 0.45)
+              : (textSecondary?.withValues(alpha: 0.18) ?? Colors.grey),
+          width: 1.4,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: _autoCompleteOnChecklist
+                  ? primary.withValues(alpha: 0.15)
+                  : (textSecondary?.withValues(alpha: 0.1) ?? Colors.grey),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              size: 18,
+              color: _autoCompleteOnChecklist ? primary : textSecondary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Auto-complete when all done',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: _autoCompleteOnChecklist ? primary : textPrimary,
+                      ),
+                    ),
+                    if (_autoCompleteOnChecklist) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: primary,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'ENABLED',
+                          style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: 0.8),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Task will automatically become Completed\nwhen all checklist & sub-tasks are checked',
+                  style: TextStyle(fontSize: 11, color: textSecondary),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: _autoCompleteOnChecklist,
+            onChanged: (v) => setState(() => _autoCompleteOnChecklist = v),
+            activeThumbColor: primary,
+            activeTrackColor: primary.withValues(alpha: 0.5),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _clSubHeader(BuildContext context, IconData icon, String label) {
+    final primary = Theme.of(context).colorScheme.primary;
     return Row(
       children: [
-        Icon(icon, size: 14, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 6),
-        Text(label,
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(fontWeight: FontWeight.w700, fontSize: 13)),
+        Icon(icon, size: 18, color: primary),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+              ),
+        ),
       ],
     );
   }
@@ -889,21 +993,25 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
     Color primary, {
     bool compact = false,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: compact ? 2 : 4),
-        child: Row(
-          children: [
-            Icon(Icons.add_circle_outline_rounded,
-                size: compact ? 13 : 15, color: primary),
-            const SizedBox(width: 6),
-            Text(label,
-                style: TextStyle(
-                    color: primary,
-                    fontSize: compact ? 11 : 13,
-                    fontWeight: FontWeight.w600)),
-          ],
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: compact ? 3 : 6),
+      child: OutlinedButton.icon(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: primary,
+          side: BorderSide(color: primary.withValues(alpha: 0.4), width: 1.2),
+          padding: EdgeInsets.symmetric(
+              horizontal: compact ? 10 : 14, vertical: compact ? 7 : 10),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(compact ? 8 : 10)),
+        ),
+        icon: Icon(Icons.add_rounded, size: compact ? 15 : 17),
+        label: Text(
+          label,
+          style: TextStyle(
+              fontSize: compact ? 12 : 13, fontWeight: FontWeight.w600),
         ),
       ),
     );

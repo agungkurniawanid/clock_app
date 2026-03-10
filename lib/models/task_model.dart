@@ -154,6 +154,10 @@ class TaskModel {
   final List<ChecklistItem> checklist;
   final List<SubTask> subTasks;
 
+  /// When true, task status automatically changes to [TaskStatus.completed]
+  /// once every checklist item and sub-task is checked.
+  final bool autoCompleteOnChecklist;
+
   const TaskModel({
     required this.id,
     required this.title,
@@ -197,6 +201,7 @@ class TaskModel {
     required this.history,
     this.checklist = const [],
     this.subTasks = const [],
+    this.autoCompleteOnChecklist = false,
   });
 
   // ── JSON serialization ─────────────────────────────────────────────────────
@@ -237,6 +242,7 @@ class TaskModel {
         'history': history,
         'checklist': checklist.map((c) => c.toJson()).toList(),
         'subTasks': subTasks.map((s) => s.toJson()).toList(),
+        'autoCompleteOnChecklist': autoCompleteOnChecklist,
       };
 
   factory TaskModel.fromJson(Map<String, dynamic> json) {
@@ -311,6 +317,8 @@ class TaskModel {
               ?.map((e) => SubTask.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
+      autoCompleteOnChecklist:
+          json['autoCompleteOnChecklist'] as bool? ?? false,
     );
   }
 
@@ -352,6 +360,7 @@ class TaskModel {
     List<String>? history,
     List<ChecklistItem>? checklist,
     List<SubTask>? subTasks,
+    bool? autoCompleteOnChecklist,
   }) {
     return TaskModel(
       id: id ?? this.id,
@@ -389,6 +398,8 @@ class TaskModel {
       history: history ?? this.history,
       checklist: checklist ?? this.checklist,
       subTasks: subTasks ?? this.subTasks,
+      autoCompleteOnChecklist:
+          autoCompleteOnChecklist ?? this.autoCompleteOnChecklist,
     );
   }
 

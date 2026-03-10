@@ -4,6 +4,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz;
 import '../models/task_model.dart';
+import '../models/birthday_model.dart';
 
 /// Called whenever a notification is tapped (foreground or background).
 /// Set this in main.dart before calling [NotificationService.init].
@@ -22,7 +23,7 @@ class NotificationService {
   static bool dndEnabled = false;
   static String defaultAlarmMusic = 'alarm_clock.mp3';
   static double defaultAlarmVolume = 1.0; // 0.0–1.0
-  static String defaultNotifMusic = 'alarm_clock.mp3';
+  static String defaultNotifMusic = 'mixkit-happy-bells-notification-937.mp3';
   static double defaultNotifVolume = 1.0; // 0.0–1.0
   static String defaultReminder = '1 Hour Before';
 
@@ -85,6 +86,23 @@ class NotificationService {
         description: 'Reminder alerts before task start time',
         importance: Importance.high,
         playSound: true,
+        sound: RawResourceAndroidNotificationSound(
+            'mixkit_happy_bells_notification_937'),
+        enableVibration: true,
+      ),
+    );
+
+    // Birthday channel – high importance, festive notification sound
+    await ap?.deleteNotificationChannel('birthday_channel');
+    await ap?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        'birthday_channel',
+        'Birthday Reminders',
+        description: 'Pengingat ulang tahun',
+        importance: Importance.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound(
+            'mixkit_happy_bells_notification_937'),
         enableVibration: true,
       ),
     );
@@ -197,7 +215,7 @@ class NotificationService {
     final useAlarmChannel = task.alarmMode == AlarmMode.alarmMusic;
 
     for (int i = 0; i < remindersToUse.length; i++) {
-      final mins = _reminderMinutes(remindersToUse[i]);
+      final mins = reminderMinutes(remindersToUse[i]);
       if (mins == null) continue;
       final remind = taskDt.subtract(Duration(minutes: mins));
       if (remind.isBefore(DateTime.now())) continue;
@@ -228,6 +246,8 @@ class NotificationService {
               importance: Importance.high,
               priority: Priority.high,
               playSound: true,
+              sound: const RawResourceAndroidNotificationSound(
+                  'mixkit_happy_bells_notification_937'),
               enableVibration: vibrationEnabled,
             );
 
@@ -237,6 +257,81 @@ class NotificationService {
             ? '⏰  ${remindersToUse[i]}: ${task.title}'
             : '🔔  ${remindersToUse[i]}: ${task.title}',
         'Starts at ${task.timeLabel}',
+        remindTz,
+        NotificationDetails(android: androidDetails),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: task.id,
+      );
+    }
+  }
+
+  // ── Schedule due-date reminders ────────────────────────────────────────────
+  // When the task's alarmMode == alarmMusic, every due-date reminder also fires
+  // as a full-screen alarm (same alarm channel) so AlarmScreen opens and the
+  // configured alarm music plays.  When notificationOnly, a quiet reminder is
+  // shown instead (subject to DND).
+  static Future<void> scheduleDueReminders(TaskModel task) async {
+    if (!task.dueDateEnabled || task.dueDate == null) return;
+    if (!task.dueReminderEnabled || task.dueReminders.isEmpty) return;
+
+    final dueTime = task.dueTime;
+    final dueDt = DateTime(
+      task.dueDate!.year,
+      task.dueDate!.month,
+      task.dueDate!.day,
+      dueTime?.hour ?? 23,
+      dueTime?.minute ?? 59,
+    );
+
+    // Due reminders always follow the task's main alarmMode so that alarm-mode
+    // tasks consistently show AlarmScreen for ALL their reminders.
+    final useAlarmChannel = task.alarmMode == AlarmMode.alarmMusic;
+
+    for (int i = 0; i < task.dueReminders.length; i++) {
+      final mins = reminderMinutes(task.dueReminders[i]);
+      if (mins == null) continue;
+      final remind = dueDt.subtract(Duration(minutes: mins));
+      if (remind.isBefore(DateTime.now())) continue;
+
+      final remindTz = tz.TZDateTime.from(remind, tz.local);
+
+      // DND: skip non-alarm notifications that fall within quiet hours
+      if (!useAlarmChannel && dndEnabled && _isDndTime(remindTz)) continue;
+
+      final AndroidNotificationDetails androidDetails = useAlarmChannel
+          ? AndroidNotificationDetails(
+              'alarm_channel',
+              'Smart Alarm',
+              channelDescription: 'Task alarms — rings even with screen off',
+              importance: Importance.max,
+              priority: Priority.high,
+              fullScreenIntent: true,
+              category: AndroidNotificationCategory.alarm,
+              playSound: true,
+              sound: const RawResourceAndroidNotificationSound('alarm_clock'),
+              enableVibration: vibrationEnabled,
+              visibility: NotificationVisibility.public,
+              autoCancel: false,
+            )
+          : AndroidNotificationDetails(
+              'reminder_channel',
+              'Task Reminders',
+              importance: Importance.high,
+              priority: Priority.high,
+              playSound: true,
+              sound: const RawResourceAndroidNotificationSound(
+                  'mixkit_happy_bells_notification_937'),
+              enableVibration: vibrationEnabled,
+            );
+
+      await _plugin.zonedSchedule(
+        _dueReminderId(task.id, i),
+        useAlarmChannel
+            ? '⏰  Due ${task.dueReminders[i]}: ${task.title}'
+            : '🔔  Due ${task.dueReminders[i]}: ${task.title}',
+        'Due at ${task.dueTimeLabel ?? 'end of day'}',
         remindTz,
         NotificationDetails(android: androidDetails),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -272,16 +367,143 @@ class NotificationService {
     for (int i = 0; i < 6; i++) {
       await _plugin.cancel(_reminderId(taskId, i));
     }
+    // Also cancel due-date reminder notifications
+    for (int i = 0; i < 6; i++) {
+      await _plugin.cancel(_dueReminderId(taskId, i));
+    }
   }
 
   static Future<void> cancelAll() async {
     await _plugin.cancelAll();
   }
 
+  // ── Birthday Reminders ────────────────────────────────────────────────────
+  // Schedules 4 notifications for the next birthday occurrence:
+  //   index 0 → 3 days before  (sebentar lagi ulang tahun)
+  //   index 1 → 2 days before  (sebentar lagi ulang tahun)
+  //   index 2 → 1 day  before  (besok ulang tahun)
+  //   index 3 → on the day     (selamat ulang tahun!)
+  // All fire at 09:00 local time.  Notifications already in the past are skipped.
+  static Future<void> scheduleBirthdayReminders(BirthdayEntry entry) async {
+    final nextBirthday = _nextBirthdayDate(entry.month, entry.day);
+
+    // [daysOffset, notifIndex]
+    const schedule = [
+      [3, 0],
+      [2, 1],
+      [1, 2],
+      [0, 3],
+    ];
+
+    for (final item in schedule) {
+      final daysOffset = item[0];
+      final idx = item[1];
+
+      final notifDate = nextBirthday.subtract(Duration(days: daysOffset));
+      final notifDt =
+          DateTime(notifDate.year, notifDate.month, notifDate.day, 9, 0);
+
+      if (notifDt.isBefore(DateTime.now())) continue;
+
+      final notifTz = tz.TZDateTime.from(notifDt, tz.local);
+
+      final String title;
+      final String body;
+
+      if (entry.type == BirthdayType.self) {
+        if (daysOffset == 0) {
+          title = '🎂 Selamat Ulang Tahun!';
+          body =
+              'Hari ini ulang tahunmu! Semoga hari-harimu penuh kebahagiaan 🎉🎊';
+        } else if (daysOffset == 1) {
+          title = '🎂 Reminder Ulang Tahun';
+          body = 'Besok ulang tahunmu! Siapkan perayaanmu 🥳';
+        } else {
+          title = '🎂 Reminder Ulang Tahun';
+          body =
+              'Sebentar lagi ulang tahunmu! Tinggal $daysOffset hari lagi 🎉';
+        }
+      } else {
+        final name = entry.name;
+        if (daysOffset == 0) {
+          title = '🎂 Selamat Ulang Tahun $name!';
+          body = 'Hari ini ulang tahun $name! Jangan lupa ucapkan selamat 🎊';
+        } else if (daysOffset == 1) {
+          title = '🎂 Reminder Ulang Tahun $name';
+          body = 'Besok $name ulang tahun! Jangan lupa ucapkan selamat 🎁';
+        } else {
+          title = '🎂 Reminder Ulang Tahun $name';
+          body =
+              'Sebentar lagi $name ulang tahun! Tinggal $daysOffset hari lagi';
+        }
+      }
+
+      final androidDetails = AndroidNotificationDetails(
+        'birthday_channel',
+        'Birthday Reminders',
+        channelDescription: 'Pengingat ulang tahun',
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: true,
+        sound: const RawResourceAndroidNotificationSound(
+            'mixkit_happy_bells_notification_937'),
+        enableVibration: vibrationEnabled,
+        largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+      );
+
+      const iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      await _plugin.zonedSchedule(
+        _birthdayReminderId(entry.id, idx),
+        title,
+        body,
+        notifTz,
+        NotificationDetails(android: androidDetails, iOS: iosDetails),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: 'birthday_${entry.id}',
+      );
+    }
+  }
+
+  /// Cancels all 4 birthday reminder notifications for [entryId].
+  static Future<void> cancelBirthdayReminders(String entryId) async {
+    for (int i = 0; i < 4; i++) {
+      await _plugin.cancel(_birthdayReminderId(entryId, i));
+    }
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
   static int _alarmId(String id) => id.hashCode.abs() % 2147483647;
   static int _reminderId(String id, int i) =>
       (_alarmId(id) + i + 1) % 2147483647;
+  static int _dueReminderId(String id, int i) =>
+      (_alarmId(id) + 200 + i) % 2147483647;
+
+  // Birthday notification IDs use offset 500–503 to avoid collision with
+  // task offsets (1–6 for start reminders, 200–206 for due reminders).
+  static int _birthdayBaseId(String id) => id.hashCode.abs() % 2147483647;
+  static int _birthdayReminderId(String id, int i) =>
+      (_birthdayBaseId(id) + 500 + i) % 2147483647;
+
+  /// Returns the next calendar date (at midnight) on which [month]/[day]
+  /// occurs.  If today is already that date, returns today so the on-day
+  /// notification can be scheduled at 09:00.  Rolls over to next year when
+  /// the date has already passed completely.
+  static DateTime _nextBirthdayDate(int month, int day) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    var next = DateTime(now.year, month, day);
+    if (next.isBefore(today)) {
+      next = DateTime(now.year + 1, month, day);
+    }
+    return next;
+  }
 
   /// Returns true when [dt] falls within DND quiet hours (22:00 – 07:00).
   static bool _isDndTime(tz.TZDateTime dt) {
@@ -312,7 +534,9 @@ class NotificationService {
     }
   }
 
-  static int? _reminderMinutes(String label) {
+  /// Converts a reminder label string to minutes offset.
+  /// Made public so foreground alarm checker in main.dart can reuse it.
+  static int? reminderMinutes(String label) {
     if (label.contains('1 Day')) return 1440;
     if (label.contains('3 Hours')) return 180;
     if (label.contains('1 Hour')) return 60;

@@ -25,6 +25,10 @@ dependencies:
   http: ^1.4.0
   # Location detection for dynamic holidays
   geolocator: ^13.0.4
+  # Excel import/export
+  excel: ^4.0.6
+  path_provider: ^2.1.4
+  share_plus: ^10.0.1
 
 dev_dependencies:
   flutter_test:
@@ -35,12 +39,12 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/icon-launcher.png"
+  image_path: "assets/icon-launcher-2.png"
 
 flutter:
   uses-material-design: true
 
   assets:
-    - assets/icon-launcher.png
+    - assets/icon-launcher-2.png
     - assets/banner.png
     - assets/music/

@@ -189,11 +189,39 @@ class TaskNotifier extends StateNotifier<List<TaskModel>> {
     await _save();
   }
 
+  /// Import [tasks] into the task list.
+  ///
+  /// When [replace] is true, all existing tasks are cleared first.
+  /// When [replace] is false, imported tasks are merged (skipping IDs that
+  /// already exist).
+  Future<int> importTasksBulk(List<TaskModel> tasks,
+      {required bool replace}) async {
+    int count;
+    if (replace) {
+      await NotificationService.cancelAll();
+      state = List.of(tasks);
+      count = tasks.length;
+    } else {
+      final existingIds = state.map((t) => t.id).toSet();
+      final newTasks = tasks.where((t) => !existingIds.contains(t.id)).toList();
+      state = [...state, ...newTasks];
+      count = newTasks.length;
+    }
+    await _save();
+    for (final task in tasks) {
+      if (task.status != TaskStatus.completed) {
+        await _scheduleAll(task);
+      }
+    }
+    return count;
+  }
+
   // ── Schedule notifications + reminders ─────────────────────────────────────
   Future<void> _scheduleAll(TaskModel task) async {
     if (task.status == TaskStatus.completed) return;
     await NotificationService.scheduleTaskAlarm(task);
     await NotificationService.scheduleReminders(task);
+    await NotificationService.scheduleDueReminders(task);
   }
 
   // ── Reschedule all after boot / reopen ─────────────────────────────────────
@@ -604,7 +632,7 @@ final defaultReminderProvider = StateProvider<String>((ref) => '1 Hour Before');
 
 // ── Default Notification (notificationOnly mode) ──────────────────────────────
 final defaultNotifMusicProvider =
-    StateProvider<String>((ref) => 'alarm_clock.mp3');
+    StateProvider<String>((ref) => 'mixkit-happy-bells-notification-937.mp3');
 final defaultNotifVolumeProvider = StateProvider<double>((ref) => 100.0);
 
 // ─── Auth UI State ────────────────────────────────────────────────────────────
@@ -623,6 +651,11 @@ class BirthdayNotifier extends StateNotifier<List<BirthdayEntry>> {
   Future<void> _load() async {
     final saved = await StorageService.loadBirthdays();
     state = saved;
+    // Reschedule birthday reminders on every app start / boot so
+    // notifications roll over to the next year automatically.
+    for (final entry in saved) {
+      await NotificationService.scheduleBirthdayReminders(entry);
+    }
   }
 
   Future<void> _save() async {
@@ -632,6 +665,7 @@ class BirthdayNotifier extends StateNotifier<List<BirthdayEntry>> {
   Future<void> addEntry(BirthdayEntry entry) async {
     state = [...state, entry];
     await _save();
+    await NotificationService.scheduleBirthdayReminders(entry);
   }
 
   Future<void> updateEntry(BirthdayEntry entry) async {
@@ -640,9 +674,12 @@ class BirthdayNotifier extends StateNotifier<List<BirthdayEntry>> {
         if (e.id == entry.id) entry else e,
     ];
     await _save();
+    await NotificationService.cancelBirthdayReminders(entry.id);
+    await NotificationService.scheduleBirthdayReminders(entry);
   }
 
   Future<void> deleteEntry(String id) async {
+    await NotificationService.cancelBirthdayReminders(id);
     state = state.where((e) => e.id != id).toList();
     await _save();
   }

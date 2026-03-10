@@ -8,7 +8,7 @@ import '../services/storage_service.dart';
 import '../widgets/swipeable_card.dart';
 import '../widgets/empty_state_widget.dart';
 import 'add_task_screen.dart';
-import 'settings_screen.dart';
+import 'birthday_screen.dart';
 import 'task_detail_screen.dart';
 
 const _tabs = [
@@ -342,7 +342,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
               },
               onGoToSettings: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                MaterialPageRoute(builder: (_) => const BirthdayScreen()),
               ),
             ),
           Expanded(child: bodyContent),
@@ -389,10 +389,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
             child: Text(
               'Tidak ada tugas untuk hari ini',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.33),
+                    color: const Color(0xFF171717),
                     fontStyle: FontStyle.italic,
                     fontSize: 12,
                   ),
@@ -431,12 +428,12 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
         icon: Icons.cake_rounded,
         title: 'Belum Ada Data Ulang Tahun',
         subtitle:
-            'Tambahkan ulang tahun Anda, keluarga, atau teman di halaman Settings.',
+            'Tambahkan ulang tahun Anda, keluarga, atau teman di halaman Ulang Tahun.',
         onAction: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+          MaterialPageRoute(builder: (_) => const BirthdayScreen()),
         ),
-        actionLabel: 'Buka Settings',
+        actionLabel: 'Buka Ulang Tahun',
       );
     }
 
@@ -597,10 +594,7 @@ class _DateGroupHeader extends StatelessWidget {
                   style: textTheme.labelSmall?.copyWith(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.4),
+                    color: const Color(0xFF171717),
                     letterSpacing: 0.4,
                   ),
                 ),
@@ -1418,7 +1412,7 @@ class _BirthdayInfoBadge extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Anda bisa menambahkan data tanggal ulang tahun Anda dan teman-teman di Settings. Ulang tahun akan muncul di tab All dan tab Birthday.',
+                  'Anda bisa menambahkan data tanggal ulang tahun Anda dan teman-teman di halaman Ulang Tahun. Ulang tahun akan muncul di tab All dan tab Birthday.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         fontSize: 12,
                         color: Theme.of(context)

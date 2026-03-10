@@ -458,9 +458,45 @@ class TaskDetailScreen extends ConsumerWidget {
     Color? textSecondary,
     Color primary,
   ) {
+    final allDone = task.totalChecklistItems > 0 &&
+        task.completedChecklistItems == task.totalChecklistItems;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // ── All-done badge ──────────────────────────────────────────────
+        if (allDone) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF22C55E).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: const Color(0xFF22C55E).withValues(alpha: 0.4),
+                  width: 1.2),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded,
+                    size: 18, color: Color(0xFF22C55E)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    task.autoCompleteOnChecklist
+                        ? 'Semua checklist selesai! Task otomatis Completed.'
+                        : 'Semua checklist & sub-task sudah selesai!',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF22C55E),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         // Flat checklist items
         if (task.checklist.isNotEmpty) ...[
           ...task.checklist.map((item) => _checklistItemTile(
@@ -477,7 +513,7 @@ class TaskDetailScreen extends ConsumerWidget {
                             : c)
                         .toList(),
                   );
-                  ref.read(taskListProvider.notifier).updateTask(updated);
+                  _handleChecklistUpdate(context, updated, ref);
                 },
               )),
           if (task.subTasks.isNotEmpty) const SizedBox(height: 8),
@@ -524,7 +560,7 @@ class TaskDetailScreen extends ConsumerWidget {
                   onChanged: (_) {
                     final updated = task.copyWith(
                         subTasks: _toggleSubTaskInTree(task.subTasks, st.id));
-                    ref.read(taskListProvider.notifier).updateTask(updated);
+                    _handleChecklistUpdate(context, updated, ref);
                   },
                 ),
                 title: Text(
@@ -567,9 +603,7 @@ class TaskDetailScreen extends ConsumerWidget {
                             final updated = task.copyWith(
                                 subTasks: _toggleChecklistInTree(
                                     task.subTasks, st.id, c.id));
-                            ref
-                                .read(taskListProvider.notifier)
-                                .updateTask(updated);
+                            _handleChecklistUpdate(context, updated, ref);
                           },
                         )),
                     if (st.subTasks.isNotEmpty) const SizedBox(height: 8),
@@ -612,7 +646,7 @@ class TaskDetailScreen extends ConsumerWidget {
               onToggle: () {
                 final updated = task.copyWith(
                     subTasks: _toggleSubTaskInTree(task.subTasks, st.id));
-                ref.read(taskListProvider.notifier).updateTask(updated);
+                _handleChecklistUpdate(context, updated, ref);
               },
             ),
     );
@@ -665,6 +699,23 @@ class TaskDetailScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  // ── Auto-complete helper ────────────────────────────────────────────────
+  void _handleChecklistUpdate(
+      BuildContext context, TaskModel updated, WidgetRef ref) {
+    ref.read(taskListProvider.notifier).updateTask(updated);
+    if (updated.autoCompleteOnChecklist &&
+        updated.totalChecklistItems > 0 &&
+        updated.completedChecklistItems == updated.totalChecklistItems &&
+        updated.status != TaskStatus.completed) {
+      ref.read(taskListProvider.notifier).markComplete(updated.id);
+      AppToast.show(
+        context,
+        'Semua checklist selesai! Task otomatis Completed.',
+        type: ToastType.success,
+      );
+    }
   }
 
   // ── Tree toggle helpers ─────────────────────────────────────────────────

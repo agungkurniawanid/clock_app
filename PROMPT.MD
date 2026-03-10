@@ -1,0 +1,1 @@
+buatkan lengkap readme.md untuk github saya lengkap semua fitur yang ada di aplikasi ini cantumkan semua jangan ada yang terlewat 1 pun fitur! jadi urutanya adalah jelaskan dulu fitur utamanya sampai fitur yang paling urgensinya paling rendah

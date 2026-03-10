@@ -136,7 +136,8 @@ class StorageService {
 
   static Future<String> loadDefaultNotifMusic() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_defaultNotifMusicKey) ?? 'alarm_clock.mp3';
+    return prefs.getString(_defaultNotifMusicKey) ??
+        'mixkit-happy-bells-notification-937.mp3';
   }
 
   static Future<void> saveDefaultNotifVolume(double volume) async {
