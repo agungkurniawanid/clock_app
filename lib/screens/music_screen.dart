@@ -16,6 +16,13 @@ class _MusicScreenState extends ConsumerState<MusicScreen> {
   String? _previewingId;
   String _searchQuery = '';
 
+  String _fileForPlayback(MusicModel music) {
+    if (music.id.startsWith('custom_')) {
+      return music.id.substring('custom_'.length);
+    }
+    return music.fileName;
+  }
+
   @override
   void dispose() {
     AudioService.instance.stop();
@@ -35,20 +42,41 @@ class _MusicScreenState extends ConsumerState<MusicScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allMusic     = ref.watch(musicListProvider);
-    final selectedId   = ref.watch(selectedMusicIdProvider);
+    final allMusic = ref.watch(musicListProvider);
+    final selectedId = ref.watch(selectedMusicIdProvider);
     final categoryFilt = ref.watch(musicCategoryFilterProvider);
-    final defaultVol   = ref.watch(defaultVolumeProvider) / 100.0;
+    final defaultVol = ref.watch(defaultVolumeProvider) / 100.0;
+    final customFiles = ref.watch(customMusicFilesProvider);
+
+    final customMusicModels = customFiles.map((path) {
+      return MusicModel(
+        id: 'custom_$path',
+        fileName: AudioService.displayName(path),
+        duration: '--',
+        category: MusicCategory.custom,
+      );
+    }).toList();
 
     final selectedMusic = allMusic.firstWhere((m) => m.id == selectedId,
-        orElse: () => allMusic.first);
+        orElse: () => customMusicModels.firstWhere((m) => m.id == selectedId,
+            orElse: () => allMusic.first));
 
     final musicList = allMusic.where((m) {
-      final matchCat    = categoryFilt == null || m.category == categoryFilt;
+      final matchCat = categoryFilt == null || m.category == categoryFilt;
       final matchSearch = _searchQuery.isEmpty ||
           m.fileName.toLowerCase().contains(_searchQuery.toLowerCase());
       return matchCat && matchSearch;
     }).toList();
+
+    final filteredCustom = customMusicModels.where((m) {
+      final matchCat =
+          categoryFilt == null || categoryFilt == MusicCategory.custom;
+      final matchSearch = _searchQuery.isEmpty ||
+          m.fileName.toLowerCase().contains(_searchQuery.toLowerCase());
+      return matchCat && matchSearch;
+    }).toList();
+
+    final mergedList = [...musicList, ...filteredCustom];
 
     final isSelectedPlaying = _previewingId == selectedId;
 
@@ -122,10 +150,10 @@ class _MusicScreenState extends ConsumerState<MusicScreen> {
                 ),
                 GestureDetector(
                   onTap: () => _togglePreview(
-                      selectedId, selectedMusic.fileName, defaultVol),
+                      selectedId, _fileForPlayback(selectedMusic), defaultVol),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(10),
@@ -167,18 +195,18 @@ class _MusicScreenState extends ConsumerState<MusicScreen> {
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
-              itemCount: musicList.length,
+              itemCount: mergedList.length,
               itemBuilder: (ctx, i) {
-                final music        = musicList[i];
-                final isSelected   = music.id == selectedId;
+                final music = mergedList[i];
+                final isCustom = music.id.startsWith('custom_');
+                final isSelected = music.id == selectedId;
                 final isPreviewing = _previewingId == music.id;
                 return _MusicTile(
                   music: music,
                   isSelected: isSelected,
                   isPreviewing: isPreviewing,
                   onTap: () {
-                    ref.read(selectedMusicIdProvider.notifier).state =
-                        music.id;
+                    ref.read(selectedMusicIdProvider.notifier).state = music.id;
                     if (_previewingId != null && _previewingId != music.id) {
                       AudioService.instance.stop();
                       setState(() => _previewingId = null);
@@ -187,8 +215,24 @@ class _MusicScreenState extends ConsumerState<MusicScreen> {
                   onFavorite: () => ref
                       .read(musicListProvider.notifier)
                       .toggleFavorite(music.id),
-                  onPreview: () =>
-                      _togglePreview(music.id, music.fileName, defaultVol),
+                  onPreview: () => _togglePreview(
+                      music.id, _fileForPlayback(music), defaultVol),
+                  onDelete: isCustom
+                      ? () async {
+                          final path = _fileForPlayback(music);
+                          if (_previewingId == music.id) {
+                            await AudioService.instance.stop();
+                            setState(() => _previewingId = null);
+                          }
+                          if (selectedId == music.id) {
+                            ref.read(selectedMusicIdProvider.notifier).state =
+                                allMusic.isNotEmpty ? allMusic.first.id : '';
+                          }
+                          await ref
+                              .read(customMusicFilesProvider.notifier)
+                              .removeFile(path);
+                        }
+                      : null,
                 );
               },
             ),
@@ -202,28 +246,22 @@ class _MusicScreenState extends ConsumerState<MusicScreen> {
       MusicCategory? value, String label, MusicCategory? current) {
     final active = current == value;
     return GestureDetector(
-      onTap: () =>
-          ref.read(musicCategoryFilterProvider.notifier).state = value,
+      onTap: () => ref.read(musicCategoryFilterProvider.notifier).state = value,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.only(right: 8),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: active
               ? Theme.of(context).colorScheme.secondary
-              : Theme.of(context)
-                  .colorScheme
-                  .secondary
-                  .withValues(alpha: 0.1),
+              : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: active
-                ? Colors.white
-                : Theme.of(context).colorScheme.secondary,
+            color:
+                active ? Colors.white : Theme.of(context).colorScheme.secondary,
             fontWeight: FontWeight.w700,
             fontSize: 13,
           ),
@@ -240,6 +278,7 @@ class _MusicTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onFavorite;
   final VoidCallback onPreview;
+  final VoidCallback? onDelete;
 
   const _MusicTile({
     required this.music,
@@ -248,14 +287,15 @@ class _MusicTile extends StatelessWidget {
     required this.onTap,
     required this.onFavorite,
     required this.onPreview,
+    this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isDark    = Theme.of(context).brightness == Brightness.dark;
-    final bg        = isDark ? darkCard : lightCard;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? darkCard : lightCard;
     final secondary = Theme.of(context).colorScheme.secondary;
-    final textSec   = Theme.of(context).textTheme.bodyMedium?.color;
+    final textSec = Theme.of(context).textTheme.bodyMedium?.color;
 
     return GestureDetector(
       onTap: onTap,
@@ -283,9 +323,7 @@ class _MusicTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
-              isPreviewing
-                  ? Icons.equalizer_rounded
-                  : Icons.music_note_rounded,
+              isPreviewing ? Icons.equalizer_rounded : Icons.music_note_rounded,
               color: (isPreviewing || isSelected) ? secondary : textSec,
               size: 20,
             ),
@@ -300,10 +338,7 @@ class _MusicTile extends StatelessWidget {
                     child: Text(
                       music.fileName,
                       style: TextStyle(
-                        color: Theme.of(context)
-                            .textTheme
-                            .bodyLarge
-                            ?.color,
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
                       ),
@@ -339,22 +374,28 @@ class _MusicTile extends StatelessWidget {
             iconSize: 22,
             color: isPreviewing ? statusRisk : secondary,
             padding: EdgeInsets.zero,
-            constraints:
-                const BoxConstraints(minWidth: 32, minHeight: 32),
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
           ),
-          IconButton(
-            onPressed: onFavorite,
-            icon: Icon(music.isFavorite
-                ? Icons.star_rounded
-                : Icons.star_border_rounded),
-            iconSize: 22,
-            color: music.isFavorite
-                ? const Color(0xFFECC94B)
-                : textSec,
-            padding: EdgeInsets.zero,
-            constraints:
-                const BoxConstraints(minWidth: 32, minHeight: 32),
-          ),
+          if (onDelete != null)
+            IconButton(
+              onPressed: onDelete,
+              icon: const Icon(Icons.delete_outline_rounded),
+              iconSize: 22,
+              color: statusRisk,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            )
+          else
+            IconButton(
+              onPressed: onFavorite,
+              icon: Icon(music.isFavorite
+                  ? Icons.star_rounded
+                  : Icons.star_border_rounded),
+              iconSize: 22,
+              color: music.isFavorite ? const Color(0xFFECC94B) : textSec,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            ),
         ]),
       ),
     );

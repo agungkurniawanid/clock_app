@@ -21,6 +21,10 @@ dependencies:
   timezone: ^0.9.4
   # Audio playback
   audioplayers: ^6.1.0
+  # HTTP requests
+  http: ^1.4.0
+  # Location detection for dynamic holidays
+  geolocator: ^13.0.4
 
 dev_dependencies:
   flutter_test:

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dummy_data.dart';
+import '../data/global_events.dart';
 import '../models/task_model.dart';
 import '../models/music_model.dart';
+import '../models/birthday_model.dart';
+import '../services/holiday_service.dart';
 import '../services/notification_service.dart';
 import '../services/storage_service.dart';
 
@@ -109,6 +112,12 @@ class TaskNotifier extends StateNotifier<List<TaskModel>> {
     for (final task in state) {
       if (task.status == TaskStatus.completed ||
           task.status == TaskStatus.overdue) {
+        updated.add(task);
+        continue;
+      }
+
+      // Repeating tasks are never marked overdue — they recur on future dates.
+      if (task.repeat != RepeatType.none) {
         updated.add(task);
         continue;
       }
@@ -223,8 +232,8 @@ final taskListProvider = StateNotifierProvider<TaskNotifier, List<TaskModel>>(
 // ─── Task Filter / Search ─────────────────────────────────────────────────────
 final taskSearchQueryProvider = StateProvider<String>((ref) => '');
 
-final taskTabIndexProvider = StateProvider<int>(
-    (ref) => 0); // 0=All,1=InProgress,2=Upcoming,3=Risk,4=Overdue,5=Done
+// 0=All,1=InProgress,2=Upcoming,3=Risk,4=Overdue,5=Done,6=Birthday
+final taskTabIndexProvider = StateProvider<int>((ref) => 0);
 
 final taskPriorityFilterProvider = StateProvider<TaskPriority?>((ref) => null);
 
@@ -267,6 +276,9 @@ final filteredTasksProvider = Provider<List<TaskModel>>((ref) {
       filtered =
           filtered.where((t) => t.status == TaskStatus.completed).toList();
       break;
+    case 6: // Birthday tab — no tasks, handled separately in UI
+      filtered = [];
+      break;
   }
 
   if (priority != null) {
@@ -285,12 +297,7 @@ final filteredTasksProvider = Provider<List<TaskModel>>((ref) {
 final todayTasksProvider = Provider<List<TaskModel>>((ref) {
   final tasks = ref.watch(taskListProvider);
   final today = DateTime.now();
-  return tasks
-      .where((t) =>
-          t.date.year == today.year &&
-          t.date.month == today.month &&
-          t.date.day == today.day)
-      .toList();
+  return tasks.where((t) => t.occursOnDate(today)).toList();
 });
 
 // ─── Summary Stats ────────────────────────────────────────────────────────────
@@ -605,3 +612,87 @@ final isLoggedInProvider = StateProvider<bool>((ref) => false);
 final currentUserNameProvider = StateProvider<String>((ref) => '');
 final currentUserEmailProvider = StateProvider<String>((ref) => '');
 final hasUnsyncedLocalTasksProvider = StateProvider<bool>((ref) => true);
+
+// ─── Birthday Providers ───────────────────────────────────────────────────────
+
+class BirthdayNotifier extends StateNotifier<List<BirthdayEntry>> {
+  BirthdayNotifier() : super([]) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final saved = await StorageService.loadBirthdays();
+    state = saved;
+  }
+
+  Future<void> _save() async {
+    await StorageService.saveBirthdays(state);
+  }
+
+  Future<void> addEntry(BirthdayEntry entry) async {
+    state = [...state, entry];
+    await _save();
+  }
+
+  Future<void> updateEntry(BirthdayEntry entry) async {
+    state = [
+      for (final e in state)
+        if (e.id == entry.id) entry else e,
+    ];
+    await _save();
+  }
+
+  Future<void> deleteEntry(String id) async {
+    state = state.where((e) => e.id != id).toList();
+    await _save();
+  }
+}
+
+final birthdayListProvider =
+    StateNotifierProvider<BirthdayNotifier, List<BirthdayEntry>>(
+        (ref) => BirthdayNotifier());
+
+/// true = user clicked "I've filled in my birthday data" — badge never shows again.
+final birthdayBadgePermanentlyDismissedProvider =
+    StateProvider<bool>((ref) => false);
+
+// ─── Dynamic Public Holidays ──────────────────────────────────────────────────
+
+/// Holds the detected country code and the fetched public holidays.
+class HolidayState {
+  final String countryCode;
+  final List<GlobalEvent> holidays;
+
+  const HolidayState({
+    required this.countryCode,
+    required this.holidays,
+  });
+
+  HolidayState copyWith({
+    String? countryCode,
+    List<GlobalEvent>? holidays,
+  }) =>
+      HolidayState(
+        countryCode: countryCode ?? this.countryCode,
+        holidays: holidays ?? this.holidays,
+      );
+}
+
+class HolidayNotifier extends AsyncNotifier<HolidayState> {
+  @override
+  Future<HolidayState> build() async {
+    final countryCode = await HolidayService.detectCountryCode();
+    final holidays = await HolidayService.fetchRelevantHolidays(countryCode);
+    return HolidayState(countryCode: countryCode, holidays: holidays);
+  }
+
+  /// Call this from settings to re-detect the country (e.g. after the user
+  /// moves to a different country or grants location permission later).
+  Future<void> refresh({bool resetCountry = false}) async {
+    if (resetCountry) await HolidayService.resetCountryCache();
+    ref.invalidateSelf();
+  }
+}
+
+final holidayProvider = AsyncNotifierProvider<HolidayNotifier, HolidayState>(
+    () => HolidayNotifier());

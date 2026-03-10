@@ -3,11 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/app_providers.dart';
 import '../services/storage_service.dart';
-import '../services/audio_service.dart';
 import '../services/notification_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/app_toast.dart';
 import '../data/dummy_data.dart';
+import '../models/birthday_model.dart';
 import 'signup_screen.dart';
 import 'music_screen.dart';
 
@@ -44,6 +44,10 @@ class SettingsScreen extends ConsumerWidget {
           // Profile
           _buildProfileSection(
               context, ref, card, isDark, isLoggedIn, userName, userEmail),
+          const SizedBox(height: 20),
+
+          // ── Ulang Tahun ────────────────────────────────────────────────────
+          _BirthdaySection(card: card),
           const SizedBox(height: 20),
 
           // ── Developer ──────────────────────────────────────────────────────
@@ -131,11 +135,17 @@ class SettingsScreen extends ConsumerWidget {
                 // Pick selection from provider
                 final selected = ref.read(selectedMusicIdProvider);
                 final music = ref.read(musicListProvider);
-                final m = music.firstWhere((x) => x.id == selected,
-                    orElse: () => music.first);
-                ref.read(defaultMusicProvider.notifier).state = m.fileName;
-                NotificationService.defaultAlarmMusic = m.fileName;
-                await StorageService.saveDefaultMusic(m.fileName);
+                final String fileToSave;
+                if (selected.startsWith('custom_')) {
+                  fileToSave = selected.substring('custom_'.length);
+                } else {
+                  final m = music.firstWhere((x) => x.id == selected,
+                      orElse: () => music.first);
+                  fileToSave = m.fileName;
+                }
+                ref.read(defaultMusicProvider.notifier).state = fileToSave;
+                NotificationService.defaultAlarmMusic = fileToSave;
+                await StorageService.saveDefaultMusic(fileToSave);
               },
               borderRadius: BorderRadius.circular(10),
               child: Padding(
@@ -144,40 +154,29 @@ class SettingsScreen extends ConsumerWidget {
                   const Icon(Icons.music_note_rounded, size: 20),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text('Default Alarm Music',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w500, fontSize: 14)),
-                  ),
-                  // Preview button
-                  GestureDetector(
-                    onTap: () => _previewDefaultMusic(
-                        context, defaultMusic, defaultVol / 100.0),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .secondary
-                            .withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text('▶  Preview',
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.secondary,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 11)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Default Alarm Music',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyLarge
+                                ?.copyWith(
+                                    fontWeight: FontWeight.w500, fontSize: 14)),
+                        const SizedBox(height: 2),
+                        Text(defaultMusic,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                    color:
+                                        Theme.of(context).colorScheme.secondary,
+                                    fontWeight: FontWeight.w500),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(defaultMusic,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(fontWeight: FontWeight.w500),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1),
                   ),
                   const SizedBox(width: 4),
                   Icon(Icons.chevron_right_rounded,
@@ -248,11 +247,17 @@ class SettingsScreen extends ConsumerWidget {
                 );
                 final selected = ref.read(selectedMusicIdProvider);
                 final music = ref.read(musicListProvider);
-                final m = music.firstWhere((x) => x.id == selected,
-                    orElse: () => music.first);
-                ref.read(defaultNotifMusicProvider.notifier).state = m.fileName;
-                NotificationService.defaultNotifMusic = m.fileName;
-                await StorageService.saveDefaultNotifMusic(m.fileName);
+                final String fileToSave;
+                if (selected.startsWith('custom_')) {
+                  fileToSave = selected.substring('custom_'.length);
+                } else {
+                  final m = music.firstWhere((x) => x.id == selected,
+                      orElse: () => music.first);
+                  fileToSave = m.fileName;
+                }
+                ref.read(defaultNotifMusicProvider.notifier).state = fileToSave;
+                NotificationService.defaultNotifMusic = fileToSave;
+                await StorageService.saveDefaultNotifMusic(fileToSave);
               },
               borderRadius: BorderRadius.circular(10),
               child: Padding(
@@ -261,39 +266,29 @@ class SettingsScreen extends ConsumerWidget {
                   const Icon(Icons.notifications_active_rounded, size: 20),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text('Default Notification Music',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w500, fontSize: 14)),
-                  ),
-                  GestureDetector(
-                    onTap: () => _previewDefaultMusic(
-                        context, defaultNotifMusic, defaultNotifVol / 100.0),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .secondary
-                            .withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text('▶  Preview',
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.secondary,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 11)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Default Notification Music',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyLarge
+                                ?.copyWith(
+                                    fontWeight: FontWeight.w500, fontSize: 14)),
+                        const SizedBox(height: 2),
+                        Text(defaultNotifMusic,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                    color:
+                                        Theme.of(context).colorScheme.secondary,
+                                    fontWeight: FontWeight.w500),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(defaultNotifMusic,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(fontWeight: FontWeight.w500),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1),
                   ),
                   const SizedBox(width: 4),
                   Icon(Icons.chevron_right_rounded,
@@ -620,22 +615,6 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  // ── Preview music ─────────────────────────────────────────────────────────
-  void _previewDefaultMusic(
-      BuildContext context, String fileName, double volume) async {
-    await AudioService.instance.previewAsset(fileName, volume: volume);
-    if (context.mounted) {
-      AppToast.show(
-        context,
-        'Playing: $fileName',
-        type: ToastType.info,
-        actionLabel: 'Stop',
-        onAction: () => AudioService.instance.stop(),
-        duration: const Duration(seconds: 5),
-      );
-    }
-  }
-
   // ── Helpers ───────────────────────────────────────────────────────────────
   Widget _sectionTitle(BuildContext context, String title) {
     return Padding(
@@ -790,7 +769,7 @@ class SettingsScreen extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('Clear All Tasks'),
         content: const Text(
-            'Hapus semua task dari perangkat ini? Tindakan ini tidak dapat dibatalkan.'),
+            'Hapus semua task dari perangkat ini? Custom music dan data ulang tahun tidak akan terpengaruh. Tindakan ini tidak dapat dibatalkan.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
@@ -1129,6 +1108,507 @@ class SettingsScreen extends ConsumerWidget {
           ),
           Icon(Icons.open_in_new_rounded, size: 16, color: color),
         ]),
+      ),
+    );
+  }
+}
+
+// ─── Birthday Section Widget ──────────────────────────────────────────────────
+
+class _BirthdaySection extends ConsumerStatefulWidget {
+  final Color card;
+  const _BirthdaySection({required this.card});
+
+  @override
+  ConsumerState<_BirthdaySection> createState() => _BirthdaySectionState();
+}
+
+class _BirthdaySectionState extends ConsumerState<_BirthdaySection> {
+  static const List<String> _monthNames = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'Mei',
+    'Jun',
+    'Jul',
+    'Ags',
+    'Sep',
+    'Okt',
+    'Nov',
+    'Des'
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final birthdays = ref.watch(birthdayListProvider);
+    const birthdayColor = Color(0xFFFF6B9D);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section title
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10, left: 2),
+          child: Text(
+            '🎂 Ulang Tahun',
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: widget.card,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: birthdayColor.withValues(alpha: 0.3),
+              width: 1.2,
+            ),
+          ),
+          child: Column(
+            children: [
+              if (birthdays.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      Icon(Icons.cake_rounded,
+                          size: 38,
+                          color: birthdayColor.withValues(alpha: 0.6)),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Belum ada data ulang tahun',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tambahkan ulang tahun Anda, keluarga, atau teman',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontSize: 12,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.5)),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: birthdays.length,
+                  separatorBuilder: (_, __) => Divider(
+                    height: 1,
+                    indent: 16,
+                    endIndent: 16,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.08),
+                  ),
+                  itemBuilder: (ctx, i) {
+                    final entry = birthdays[i];
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 4),
+                      leading: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: entry.color.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                              color: entry.color.withValues(alpha: 0.5),
+                              width: 1.5),
+                        ),
+                        child: const Center(
+                          child: Text('🎂', style: TextStyle(fontSize: 18)),
+                        ),
+                      ),
+                      title: Text(
+                        entry.name,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w700, fontSize: 14),
+                      ),
+                      subtitle: Text(
+                        '${entry.day} ${_monthNames[entry.month - 1]} · ${entry.typeLabel}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontSize: 12,
+                            color: entry.color,
+                            fontWeight: FontWeight.w600),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            onPressed: () =>
+                                _showBirthdaySheet(context, entry: entry),
+                            icon: Icon(Icons.edit_rounded,
+                                size: 18,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.5)),
+                          ),
+                          IconButton(
+                            onPressed: () => _confirmDelete(context, entry),
+                            icon: const Icon(Icons.delete_rounded,
+                                size: 18, color: Color(0xFFE53E3E)),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              // Add button
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _showBirthdaySheet(context),
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('Tambah Ulang Tahun'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: birthdayColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _confirmDelete(BuildContext context, BirthdayEntry entry) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Ulang Tahun'),
+        content: Text('Hapus ulang tahun "${entry.name}"?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ref.read(birthdayListProvider.notifier).deleteEntry(entry.id);
+            },
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE53E3E),
+                foregroundColor: Colors.white),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showBirthdaySheet(BuildContext context, {BirthdayEntry? entry}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _BirthdayFormSheet(existing: entry),
+    );
+  }
+}
+
+// ── Birthday add/edit form ────────────────────────────────────────────────────
+
+class _BirthdayFormSheet extends ConsumerStatefulWidget {
+  final BirthdayEntry? existing;
+  const _BirthdayFormSheet({this.existing});
+
+  @override
+  ConsumerState<_BirthdayFormSheet> createState() => _BirthdayFormSheetState();
+}
+
+class _BirthdayFormSheetState extends ConsumerState<_BirthdayFormSheet> {
+  final _nameController = TextEditingController();
+  int _month = DateTime.now().month;
+  int _day = DateTime.now().day;
+  BirthdayType _type = BirthdayType.self;
+  Color _color = BirthdayEntry.paletteColors[0];
+
+  static const List<String> _monthNames = [
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember'
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.existing != null) {
+      _nameController.text = widget.existing!.name;
+      _month = widget.existing!.month;
+      _day = widget.existing!.day;
+      _type = widget.existing!.type;
+      _color = widget.existing!.color;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  int get _daysInMonth {
+    // Use a leap year (2000) to allow Feb 29
+    return DateTime(2000, _month + 1, 0).day;
+  }
+
+  void _save() {
+    if (_nameController.text.trim().isEmpty) return;
+    final id =
+        widget.existing?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
+    final entry = BirthdayEntry(
+      id: id,
+      name: _nameController.text.trim(),
+      month: _month,
+      day: _day.clamp(1, _daysInMonth),
+      type: _type,
+      color: _color,
+    );
+    if (widget.existing == null) {
+      ref.read(birthdayListProvider.notifier).addEntry(entry);
+    } else {
+      ref.read(birthdayListProvider.notifier).updateEntry(entry);
+    }
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const birthdayColor = Color(0xFFFF6B9D);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          24, 12, 24, 28 + MediaQuery.of(context).viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: Colors.grey.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Header
+          Row(
+            children: [
+              const Text('🎂', style: TextStyle(fontSize: 22)),
+              const SizedBox(width: 8),
+              Text(
+                widget.existing == null
+                    ? 'Tambah Ulang Tahun'
+                    : 'Edit Ulang Tahun',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Name field
+          TextField(
+            controller: _nameController,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              labelText: 'Nama',
+              hintText: 'Contoh: Budi, Mama, dll.',
+              prefixIcon: Icon(Icons.person_rounded),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Date row: Month + Day
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Bulan',
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelLarge
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<int>(
+                      value: _month,
+                      decoration: const InputDecoration(
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      ),
+                      items: List.generate(12, (i) {
+                        return DropdownMenuItem(
+                            value: i + 1, child: Text(_monthNames[i]));
+                      }),
+                      onChanged: (v) => setState(() {
+                        _month = v!;
+                        if (_day > _daysInMonth) _day = _daysInMonth;
+                      }),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Tanggal',
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelLarge
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<int>(
+                      value: _day.clamp(1, _daysInMonth),
+                      decoration: const InputDecoration(
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      ),
+                      items: List.generate(_daysInMonth, (i) {
+                        return DropdownMenuItem(
+                            value: i + 1, child: Text('${i + 1}'));
+                      }),
+                      onChanged: (v) => setState(() => _day = v!),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Type chips
+          Text('Tipe',
+              style: Theme.of(context)
+                  .textTheme
+                  .labelLarge
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: BirthdayType.values.map((t) {
+              final active = _type == t;
+              final label = t == BirthdayType.self
+                  ? '😊 Saya'
+                  : t == BirthdayType.friend
+                      ? '👫 Teman'
+                      : '👨‍👩‍👧 Keluarga';
+              return GestureDetector(
+                onTap: () => setState(() => _type = t),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: active
+                        ? birthdayColor
+                        : birthdayColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: active ? Colors.white : birthdayColor,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+
+          // Color picker
+          Text('Warna',
+              style: Theme.of(context)
+                  .textTheme
+                  .labelLarge
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: BirthdayEntry.paletteColors.map((c) {
+              final isSelected = _color.toARGB32() == c.toARGB32();
+              return GestureDetector(
+                onTap: () => setState(() => _color = c),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: isSelected ? 32 : 28,
+                  height: isSelected ? 32 : 28,
+                  decoration: BoxDecoration(
+                    color: c,
+                    shape: BoxShape.circle,
+                    border: isSelected
+                        ? Border.all(color: Colors.white, width: 2.5)
+                        : null,
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                                color: c.withValues(alpha: 0.5), blurRadius: 6)
+                          ]
+                        : null,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 24),
+
+          // Save button
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: _nameController.text.trim().isEmpty ? null : _save,
+              icon: const Icon(Icons.check_rounded, size: 18),
+              label: Text(widget.existing == null ? 'Simpan' : 'Perbarui'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: birthdayColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

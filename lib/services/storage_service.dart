@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/task_model.dart';
+import '../models/birthday_model.dart';
 
 /// Persists tasks and app settings to SharedPreferences.
 class StorageService {
@@ -21,6 +22,8 @@ class StorageService {
   static const _hasUnsyncedKey = 'auth_has_unsynced';
   static const _defaultNotifMusicKey = 'default_notif_music';
   static const _defaultNotifVolumeKey = 'default_notif_volume';
+  static const _birthdaysKey = 'birthdays_v1';
+  static const _birthdayBadgeDismissedKey = 'birthday_badge_dismissed';
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
   static Future<void> saveTasks(List<TaskModel> tasks) async {
@@ -201,6 +204,37 @@ class StorageService {
   static Future<bool> loadHasUnsynced() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_hasUnsyncedKey) ?? true;
+  }
+
+  // ── Birthdays ──────────────────────────────────────────────────────────────
+  static Future<void> saveBirthdays(List<BirthdayEntry> entries) async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = entries.map((e) => jsonEncode(e.toJson())).toList();
+    await prefs.setStringList(_birthdaysKey, list);
+  }
+
+  static Future<List<BirthdayEntry>> loadBirthdays() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_birthdaysKey);
+    if (list == null) return [];
+    try {
+      return list
+          .map((s) =>
+              BirthdayEntry.fromJson(jsonDecode(s) as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> saveBirthdayBadgeDismissed(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_birthdayBadgeDismissedKey, value);
+  }
+
+  static Future<bool> loadBirthdayBadgeDismissed() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_birthdayBadgeDismissedKey) ?? false;
   }
 
   static Future<void> clearAll() async {

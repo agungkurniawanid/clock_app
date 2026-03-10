@@ -78,6 +78,16 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
         n.setVolume(t.volume.toDouble());
         n.setSnooze(t.snoozeMinutes);
         n.setRepeat(t.repeat);
+        if (t.repeat == RepeatType.custom) {
+          _customInterval = t.customInterval;
+          _customIntervalUnit = t.customIntervalUnit;
+          _customEndType = t.customEndType;
+          _customEndDate = t.customEndDate;
+          _customEndAfterCount = t.customEndAfterCount;
+          for (int i = 0; i < 7; i++) {
+            _customWeekDays[i] = t.customWeekDays[i];
+          }
+        }
         n.setPriority(t.priority);
         n.setColorTag(t.colorTag);
         n.setStatus(t.status);
@@ -466,6 +476,12 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
       dueSnoozeMinutes: form.dueSnoozeMinutes,
       repeat: form.repeat,
       weekDays: form.weekDays,
+      customInterval: _customInterval,
+      customIntervalUnit: _customIntervalUnit,
+      customEndType: _customEndType,
+      customEndDate: _customEndDate,
+      customEndAfterCount: _customEndAfterCount,
+      customWeekDays: List.from(_customWeekDays),
       reminders: form.reminders,
       colorTag: form.colorTag,
       history: widget.editTask?.history ?? [],

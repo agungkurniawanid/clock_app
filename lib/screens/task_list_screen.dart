@@ -1,17 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/task_model.dart';
+import '../models/birthday_model.dart';
 import '../providers/app_providers.dart';
+import '../data/global_events.dart';
+import '../services/storage_service.dart';
 import '../widgets/swipeable_card.dart';
 import '../widgets/empty_state_widget.dart';
 import 'add_task_screen.dart';
+import 'settings_screen.dart';
 import 'task_detail_screen.dart';
 
-const _tabs = ['All', 'In Progress', 'Upcoming', 'Risk', 'Overdue', 'Done'];
+const _tabs = [
+  'All',
+  'In Progress',
+  'Upcoming',
+  'Risk',
+  'Overdue',
+  'Done',
+  'Birthday',
+];
 
 // ── Marker class for empty day rows ─────────────────────────────────────────
 class _EmptyDay {
   const _EmptyDay();
+}
+
+// ── Marker class for birthday occurrences in the All tab ────────────────────
+class _BirthdayItem {
+  final BirthdayEntry entry;
+  const _BirthdayItem(this.entry);
 }
 
 // ─── Task List Screen ─────────────────────────────────────────────────────────
@@ -28,6 +46,8 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   final GlobalKey _todayKey = GlobalKey();
   List<dynamic> _allItems = const [];
   bool _didInitialScroll = false;
+  // Badge is visible whenever user enters this tab (unless permanently dismissed)
+  bool _badgeVisible = true;
 
   @override
   void dispose() {
@@ -36,33 +56,63 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   }
 
   // ── Build the flat items list for the "all dates" view ───────────────────
-  List<dynamic> _buildAllDateItems(List<TaskModel> tasks) {
+  List<dynamic> _buildAllDateItems(
+    List<TaskModel> tasks,
+    List<BirthdayEntry> birthdays, {
+    List<GlobalEvent> apiHolidays = const [],
+  }) {
     final today = DateUtils.dateOnly(DateTime.now());
     DateTime startDate = today;
     DateTime endDate = today.add(const Duration(days: 30));
 
+    // Only expand the window for non-repeating tasks; repeating tasks
+    // are rendered within the fixed window based on their recurrence pattern.
     if (tasks.isNotEmpty) {
       for (final t in tasks) {
-        final d = DateUtils.dateOnly(t.date);
-        if (d.isBefore(startDate)) startDate = d;
-        if (d.isAfter(endDate)) endDate = d;
+        if (t.repeat == RepeatType.none) {
+          final d = DateUtils.dateOnly(t.date);
+          if (d.isBefore(startDate)) startDate = d;
+          if (d.isAfter(endDate)) endDate = d;
+        }
       }
     }
 
+    // Build grouped map by expanding each task's repeat occurrences in range.
     final Map<DateTime, List<TaskModel>> grouped = {};
-    for (final task in tasks) {
-      final day = DateUtils.dateOnly(task.date);
-      grouped.putIfAbsent(day, () => []).add(task);
+    var d = startDate;
+    while (!d.isAfter(endDate)) {
+      for (final task in tasks) {
+        if (task.occursOnDate(d)) {
+          grouped.putIfAbsent(d, () => []).add(task);
+        }
+      }
+      d = d.add(const Duration(days: 1));
     }
 
     final List<dynamic> items = [];
     var current = startDate;
     while (!current.isAfter(endDate)) {
       items.add(current);
+
+      // Global events for this date (cultural + API-fetched holidays)
+      final events = getEventsForDate(current, extra: apiHolidays);
+      for (final ev in events) {
+        items.add(ev);
+      }
+
+      // Birthday entries on this date
+      for (final b in birthdays) {
+        if (b.month == current.month && b.day == current.day) {
+          items.add(_BirthdayItem(b));
+        }
+      }
+
       final dayTasks = grouped[current];
       if (dayTasks != null && dayTasks.isNotEmpty) {
         items.addAll(dayTasks);
-      } else {
+      } else if (events.isEmpty &&
+          !birthdays
+              .any((b) => b.month == current.month && b.day == current.day)) {
         items.add(const _EmptyDay());
       }
       current = current.add(const Duration(days: 1));
@@ -117,18 +167,57 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     final tabIndex = ref.watch(taskTabIndexProvider);
     final filteredTasks = ref.watch(filteredTasksProvider);
     final query = ref.watch(taskSearchQueryProvider);
+    final birthdays = ref.watch(birthdayListProvider);
+    final permanentlyDismissed =
+        ref.watch(birthdayBadgePermanentlyDismissedProvider);
+    // API-fetched public holidays (empty list while loading, holidays once loaded)
+    final apiHolidays =
+        ref.watch(holidayProvider).valueOrNull?.holidays ?? const [];
+
+    // Reset badge visibility when user navigates back to this tab
+    ref.listen<int>(navIndexProvider, (prev, next) {
+      if (next == 1 && prev != 1) {
+        if (mounted) setState(() => _badgeVisible = true);
+      }
+    });
+
+    final showBadge = _badgeVisible && !permanentlyDismissed;
 
     // Determine if we should show the all-dates calendar view
     final showAllDates = tabIndex == 0 && query.isEmpty;
 
     if (showAllDates) {
-      _allItems = _buildAllDateItems(filteredTasks);
+      _allItems = _buildAllDateItems(filteredTasks, birthdays,
+          apiHolidays: apiHolidays);
       if (!_didInitialScroll) {
         _didInitialScroll = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _scrollToToday();
         });
       }
+    }
+
+    Widget bodyContent;
+    if (tabIndex == 6) {
+      // Birthday tab
+      bodyContent = _buildBirthdayTabView(context, birthdays);
+    } else if (showAllDates) {
+      bodyContent = _buildAllDatesListView(context, _allItems);
+    } else if (filteredTasks.isEmpty) {
+      bodyContent = EmptyStateWidget(
+        icon: Icons.event_busy_rounded,
+        title: tabIndex == 3 ? 'No At-Risk Tasks' : 'Nothing Here',
+        subtitle: tabIndex == 3
+            ? 'Great! You have no tasks at risk right now.'
+            : 'Add a new schedule to get started.',
+        onAction: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AddTaskScreen()),
+        ),
+        actionLabel: 'Add Schedule',
+      );
+    } else {
+      bodyContent = _buildGroupedList(context, filteredTasks);
     }
 
     return Scaffold(
@@ -148,8 +237,6 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                 TextField(
                   onChanged: (v) {
                     ref.read(taskSearchQueryProvider.notifier).state = v;
-                    // Reset initial scroll flag so we re-scroll to today
-                    // when user clears search and returns to all-dates view
                     if (v.isEmpty) _didInitialScroll = false;
                   },
                   decoration: InputDecoration(
@@ -177,10 +264,13 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                     separatorBuilder: (_, __) => const SizedBox(width: 8),
                     itemBuilder: (ctx, i) {
                       final active = tabIndex == i;
+                      final isBirthdayTab = i == 6;
+                      final tabColor = isBirthdayTab
+                          ? const Color(0xFFFF6B9D)
+                          : Theme.of(context).colorScheme.primary;
                       return GestureDetector(
                         onTap: () {
                           ref.read(taskTabIndexProvider.notifier).state = i;
-                          // Re-trigger scroll to today when switching back to All
                           if (i == 0) _didInitialScroll = false;
                         },
                         child: AnimatedContainer(
@@ -189,22 +279,32 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
                               horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
                             color: active
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context)
-                                    .colorScheme
-                                    .primary
-                                    .withValues(alpha: 0.1),
+                                ? tabColor
+                                : tabColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
+                            border: isBirthdayTab && !active
+                                ? Border.all(
+                                    color: tabColor.withValues(alpha: 0.4),
+                                    width: 1.2)
+                                : null,
                           ),
-                          child: Text(
-                            _tabs[i],
-                            style: TextStyle(
-                              color: active
-                                  ? Colors.white
-                                  : Theme.of(context).colorScheme.primary,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isBirthdayTab) ...[
+                                const Text('🎂',
+                                    style: TextStyle(fontSize: 13)),
+                                const SizedBox(width: 4),
+                              ],
+                              Text(
+                                _tabs[i],
+                                style: TextStyle(
+                                  color: active ? Colors.white : tabColor,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       );
@@ -228,22 +328,26 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
               ),
             )
           : null,
-      body: showAllDates
-          ? _buildAllDatesListView(context, _allItems)
-          : filteredTasks.isEmpty
-              ? EmptyStateWidget(
-                  icon: Icons.event_busy_rounded,
-                  title: tabIndex == 3 ? 'No At-Risk Tasks' : 'Nothing Here',
-                  subtitle: tabIndex == 3
-                      ? 'Great! You have no tasks at risk right now.'
-                      : 'Add a new schedule to get started.',
-                  onAction: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const AddTaskScreen()),
-                  ),
-                  actionLabel: 'Add Schedule',
-                )
-              : _buildGroupedList(context, filteredTasks),
+      body: Column(
+        children: [
+          if (showBadge)
+            _BirthdayInfoBadge(
+              onClose: () => setState(() => _badgeVisible = false),
+              onDismissForever: () async {
+                setState(() => _badgeVisible = false);
+                ref
+                    .read(birthdayBadgePermanentlyDismissedProvider.notifier)
+                    .state = true;
+                await StorageService.saveBirthdayBadgeDismissed(true);
+              },
+              onGoToSettings: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              ),
+            ),
+          Expanded(child: bodyContent),
+        ],
+      ),
     );
   }
 
@@ -261,6 +365,20 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
           return _DateGroupHeader(
             key: isToday ? _todayKey : null,
             date: item,
+          );
+        }
+
+        if (item is GlobalEvent) {
+          return Padding(
+            padding: const EdgeInsets.only(left: 72, right: 16, bottom: 8),
+            child: _GlobalEventCard(event: item),
+          );
+        }
+
+        if (item is _BirthdayItem) {
+          return Padding(
+            padding: const EdgeInsets.only(left: 72, right: 16, bottom: 8),
+            child: _BirthdayMiniCard(entry: item.entry),
           );
         }
 
@@ -303,6 +421,50 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
         );
       },
     );
+  }
+
+  // ── Birthday tab view ─────────────────────────────────────────────────────
+  Widget _buildBirthdayTabView(
+      BuildContext context, List<BirthdayEntry> birthdays) {
+    if (birthdays.isEmpty) {
+      return EmptyStateWidget(
+        icon: Icons.cake_rounded,
+        title: 'Belum Ada Data Ulang Tahun',
+        subtitle:
+            'Tambahkan ulang tahun Anda, keluarga, atau teman di halaman Settings.',
+        onAction: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+        ),
+        actionLabel: 'Buka Settings',
+      );
+    }
+
+    // Sort: find next occurrence of each birthday
+    final now = DateTime.now();
+    final sorted = birthdays.toList()
+      ..sort((a, b) {
+        final aNext = _nextOccurrence(a.month, a.day, now);
+        final bNext = _nextOccurrence(b.month, b.day, now);
+        return aNext.compareTo(bNext);
+      });
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      itemCount: sorted.length,
+      itemBuilder: (ctx, i) => _BirthdayEventCard(
+        entry: sorted[i],
+        nextDate: _nextOccurrence(sorted[i].month, sorted[i].day, now),
+      ),
+    );
+  }
+
+  static DateTime _nextOccurrence(int month, int day, DateTime from) {
+    final thisYear = DateTime(from.year, month, day);
+    if (!thisYear.isBefore(DateUtils.dateOnly(from))) return thisYear;
+    // If birthday already passed this year, return next year's
+    final dayInMonth = DateTime(from.year + 1, month + 1, 0).day;
+    return DateTime(from.year + 1, month, day.clamp(1, dayInMonth));
   }
 
   // ── Regular grouped list for non-All tabs ────────────────────────────────
@@ -871,6 +1033,467 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
           .textTheme
           .labelLarge
           ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 0.2),
+    );
+  }
+}
+
+// ─── Global Event Card (shown in All tab timeline) ────────────────────────────
+
+class _GlobalEventCard extends StatelessWidget {
+  final GlobalEvent event;
+  const _GlobalEventCard({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: event.color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border:
+            Border.all(color: event.color.withValues(alpha: 0.4), width: 1.2),
+      ),
+      child: Row(
+        children: [
+          Text(event.emoji, style: const TextStyle(fontSize: 18)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              event.name,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: event.color,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: event.color.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              'Libur Nasional',
+              style: TextStyle(
+                color: event.color,
+                fontWeight: FontWeight.w700,
+                fontSize: 10,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Birthday Mini Card (shown in All tab timeline) ───────────────────────────
+
+class _BirthdayMiniCard extends StatelessWidget {
+  final BirthdayEntry entry;
+  const _BirthdayMiniCard({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            entry.color.withValues(alpha: 0.18),
+            const Color(0xFFFF6B9D).withValues(alpha: 0.08),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: entry.color.withValues(alpha: 0.6),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: entry.color.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Center(
+              child: Text('🎂', style: TextStyle(fontSize: 17)),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '🎉 Ulang Tahun ${entry.name}!',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: entry.color,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  entry.typeLabel,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: entry.color.withValues(alpha: 0.8),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: entry.color.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              'Birthday 🎂',
+              style: TextStyle(
+                color: entry.color,
+                fontWeight: FontWeight.w700,
+                fontSize: 10,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Birthday Event Card (Birthday tab, full card) ────────────────────────────
+
+class _BirthdayEventCard extends StatelessWidget {
+  final BirthdayEntry entry;
+  final DateTime nextDate;
+
+  const _BirthdayEventCard({required this.entry, required this.nextDate});
+
+  static const List<String> _monthNames = [
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember'
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final isToday = DateUtils.isSameDay(nextDate, today);
+    final tomorrow = today.add(const Duration(days: 1));
+    final isTomorrow = DateUtils.isSameDay(nextDate, tomorrow);
+    final daysLeft = nextDate.difference(today).inDays;
+
+    String dateLabel;
+    if (isToday) {
+      dateLabel = '🎉 Hari ini!';
+    } else if (isTomorrow) {
+      dateLabel = 'Besok';
+    } else {
+      dateLabel =
+          '${entry.day} ${_monthNames[entry.month - 1]} · $daysLeft hari lagi';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isToday ? entry.color : entry.color.withValues(alpha: 0.4),
+          width: isToday ? 2.0 : 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: entry.color.withValues(alpha: isToday ? 0.25 : 0.1),
+            blurRadius: isToday ? 14 : 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            // Avatar with cake icon
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    entry.color,
+                    entry.color.withValues(alpha: 0.7),
+                  ],
+                ),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: entry.color.withValues(alpha: 0.35),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Text('🎂', style: TextStyle(fontSize: 26)),
+              ),
+            ),
+            const SizedBox(width: 14),
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.name,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: entry.color.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          entry.typeLabel,
+                          style: TextStyle(
+                            color: entry.color,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        dateLabel,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: isToday
+                                  ? entry.color
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withValues(alpha: 0.6),
+                              fontWeight:
+                                  isToday ? FontWeight.w800 : FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Day number badge
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color:
+                    isToday ? entry.color : entry.color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '${entry.day}',
+                    style: TextStyle(
+                      color: isToday ? Colors.white : entry.color,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18,
+                      height: 1,
+                    ),
+                  ),
+                  Text(
+                    [
+                      'Jan',
+                      'Feb',
+                      'Mar',
+                      'Apr',
+                      'Mei',
+                      'Jun',
+                      'Jul',
+                      'Ags',
+                      'Sep',
+                      'Okt',
+                      'Nov',
+                      'Des'
+                    ][entry.month - 1],
+                    style: TextStyle(
+                      color: isToday
+                          ? Colors.white.withValues(alpha: 0.85)
+                          : entry.color,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Birthday Info Badge ──────────────────────────────────────────────────────
+
+class _BirthdayInfoBadge extends StatelessWidget {
+  final VoidCallback onClose;
+  final VoidCallback onDismissForever;
+  final VoidCallback onGoToSettings;
+
+  const _BirthdayInfoBadge({
+    required this.onClose,
+    required this.onDismissForever,
+    required this.onGoToSettings,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const birthdayColor = Color(0xFFFF6B9D);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            birthdayColor.withValues(alpha: 0.15),
+            const Color(0xFF7B6EF6).withValues(alpha: 0.08),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: birthdayColor.withValues(alpha: 0.4),
+          width: 1.2,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('🎂', style: TextStyle(fontSize: 20)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Fitur Ulang Tahun Tersedia! 🎉',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: birthdayColor,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Anda bisa menambahkan data tanggal ulang tahun Anda dan teman-teman di Settings. Ulang tahun akan muncul di tab All dan tab Birthday.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: 12,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.7),
+                        height: 1.4,
+                      ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: onGoToSettings,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: birthdayColor,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'Isi Sekarang',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: onDismissForever,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: birthdayColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: birthdayColor.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          'Sudah diisi ✓',
+                          style: TextStyle(
+                            color: birthdayColor,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // Close button
+          GestureDetector(
+            onTap: onClose,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Icon(
+                Icons.close_rounded,
+                size: 18,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.4),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

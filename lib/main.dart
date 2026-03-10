@@ -54,6 +54,8 @@ void main() async {
   final savedRemind = await StorageService.loadDefaultReminder();
   final savedNotifMusic = await StorageService.loadDefaultNotifMusic();
   final savedNotifVolume = await StorageService.loadDefaultNotifVolume();
+  final savedBirthdayBadgeDismissed =
+      await StorageService.loadBirthdayBadgeDismissed();
 
   // Apply settings to NotificationService static fields
   NotificationService.vibrationEnabled = savedVib;
@@ -86,6 +88,8 @@ void main() async {
         currentUserNameProvider.overrideWith((_) => savedUserName),
         currentUserEmailProvider.overrideWith((_) => savedUserEmail),
         hasUnsyncedLocalTasksProvider.overrideWith((_) => savedHasUnsynced),
+        birthdayBadgePermanentlyDismissedProvider
+            .overrideWith((_) => savedBirthdayBadgeDismissed),
       ],
       child: const SmartAlarmApp(),
     ),

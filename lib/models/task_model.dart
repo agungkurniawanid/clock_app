@@ -135,7 +135,17 @@ class TaskModel {
 
   // ── Other ──────────────────────────────────────────────────────────────────
   final RepeatType repeat;
-  final List<bool> weekDays; // Sun–Sat
+  final List<bool> weekDays; // Sun–Sat (used for RepeatType.weekly)
+
+  // ── Custom Repeat ──────────────────────────────────────────────────────────
+  final int customInterval; // e.g. 2
+  final String customIntervalUnit; // 'Days' | 'Weeks' | 'Months' | 'Years'
+  final String customEndType; // 'Never' | 'On Date' | 'After'
+  final DateTime? customEndDate; // used when customEndType == 'On Date'
+  final int customEndAfterCount; // used when customEndType == 'After'
+  final List<bool>
+      customWeekDays; // Sun–Sat, used when customIntervalUnit == 'Weeks'
+
   final List<String> reminders; // start date reminders
   final Color colorTag;
   final List<String> history;
@@ -168,6 +178,20 @@ class TaskModel {
     this.dueSnoozeMinutes = 15,
     required this.repeat,
     required this.weekDays,
+    this.customInterval = 1,
+    this.customIntervalUnit = 'Days',
+    this.customEndType = 'Never',
+    this.customEndDate,
+    this.customEndAfterCount = 1,
+    this.customWeekDays = const [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
     required this.reminders,
     required this.colorTag,
     required this.history,
@@ -202,6 +226,12 @@ class TaskModel {
         'dueSnoozeMinutes': dueSnoozeMinutes,
         'repeat': repeat.index,
         'weekDays': weekDays,
+        'customInterval': customInterval,
+        'customIntervalUnit': customIntervalUnit,
+        'customEndType': customEndType,
+        'customEndDate': customEndDate?.toIso8601String(),
+        'customEndAfterCount': customEndAfterCount,
+        'customWeekDays': customWeekDays,
         'reminders': reminders,
         'colorTag': colorTag.toARGB32(),
         'history': history,
@@ -256,6 +286,18 @@ class TaskModel {
           (json['repeat'] as int).clamp(0, RepeatType.values.length - 1)],
       weekDays:
           (json['weekDays'] as List<dynamic>).map((e) => e as bool).toList(),
+      customInterval: json['customInterval'] as int? ?? 1,
+      customIntervalUnit: json['customIntervalUnit'] as String? ?? 'Days',
+      customEndType: json['customEndType'] as String? ?? 'Never',
+      customEndDate: json['customEndDate'] != null
+          ? DateTime.parse(json['customEndDate'] as String)
+          : null,
+      customEndAfterCount: json['customEndAfterCount'] as int? ?? 1,
+      customWeekDays: json['customWeekDays'] != null
+          ? (json['customWeekDays'] as List<dynamic>)
+              .map((e) => e as bool)
+              .toList()
+          : List.filled(7, false),
       reminders:
           (json['reminders'] as List<dynamic>).map((e) => e as String).toList(),
       colorTag: Color(json['colorTag'] as int),
@@ -298,6 +340,13 @@ class TaskModel {
     int? dueSnoozeMinutes,
     RepeatType? repeat,
     List<bool>? weekDays,
+    int? customInterval,
+    String? customIntervalUnit,
+    String? customEndType,
+    DateTime? customEndDate,
+    bool clearCustomEndDate = false,
+    int? customEndAfterCount,
+    List<bool>? customWeekDays,
     List<String>? reminders,
     Color? colorTag,
     List<String>? history,
@@ -328,6 +377,13 @@ class TaskModel {
       dueSnoozeMinutes: dueSnoozeMinutes ?? this.dueSnoozeMinutes,
       repeat: repeat ?? this.repeat,
       weekDays: weekDays ?? this.weekDays,
+      customInterval: customInterval ?? this.customInterval,
+      customIntervalUnit: customIntervalUnit ?? this.customIntervalUnit,
+      customEndType: customEndType ?? this.customEndType,
+      customEndDate:
+          clearCustomEndDate ? null : (customEndDate ?? this.customEndDate),
+      customEndAfterCount: customEndAfterCount ?? this.customEndAfterCount,
+      customWeekDays: customWeekDays ?? this.customWeekDays,
       reminders: reminders ?? this.reminders,
       colorTag: colorTag ?? this.colorTag,
       history: history ?? this.history,
@@ -425,6 +481,113 @@ class TaskModel {
     final h = dueTime!.hour.toString().padLeft(2, '0');
     final m = dueTime!.minute.toString().padLeft(2, '0');
     return '$h:$m';
+  }
+
+  // ── Repeat occurrence check ───────────────────────────────────────────────
+  /// Returns true if this task should appear on [date] based on repeat settings.
+  /// Completed tasks only match their exact start date.
+  bool occursOnDate(DateTime date) {
+    final taskStart = DateUtils.dateOnly(this.date);
+    final checkDate = DateUtils.dateOnly(date);
+
+    if (checkDate.isBefore(taskStart)) return false;
+
+    // Completed tasks don't generate future recurrences
+    if (status == TaskStatus.completed) {
+      return checkDate == taskStart;
+    }
+
+    switch (repeat) {
+      case RepeatType.none:
+        return checkDate == taskStart;
+      case RepeatType.daily:
+        return true;
+      case RepeatType.weekly:
+        final anySelected = weekDays.any((d) => d);
+        if (!anySelected) {
+          // fallback: same weekday as task start
+          return checkDate.weekday == taskStart.weekday;
+        }
+        // weekDays is [Sun=0, Mon=1, Tue=2, Wed=3, Thu=4, Fri=5, Sat=6]
+        // DateTime.weekday: Mon=1..Sun=7 → convert: Sun=7%7=0, Mon..Sat=1..6
+        final dayIndex = checkDate.weekday % 7;
+        return weekDays[dayIndex];
+      case RepeatType.monthly:
+        return checkDate.day == taskStart.day;
+      case RepeatType.custom:
+        final daysDiff = checkDate.difference(taskStart).inDays;
+
+        // Check 'On Date' end condition
+        if (customEndType == 'On Date' && customEndDate != null) {
+          final endDate = DateUtils.dateOnly(customEndDate!);
+          if (checkDate.isAfter(endDate)) return false;
+        }
+
+        // Determine if checkDate matches the recurrence pattern
+        bool occurs;
+        switch (customIntervalUnit) {
+          case 'Days':
+            occurs = daysDiff % customInterval == 0;
+            break;
+          case 'Weeks':
+            final weeksDiff = daysDiff ~/ 7;
+            final hasSelectedDays = customWeekDays.any((d) => d);
+            if (hasSelectedDays) {
+              final dayIndex = checkDate.weekday % 7; // Sun=0..Sat=6
+              occurs =
+                  weeksDiff % customInterval == 0 && customWeekDays[dayIndex];
+            } else {
+              occurs = daysDiff % (customInterval * 7) == 0;
+            }
+            break;
+          case 'Months':
+            final monthsDiff = (checkDate.year - taskStart.year) * 12 +
+                (checkDate.month - taskStart.month);
+            occurs = monthsDiff >= 0 &&
+                monthsDiff % customInterval == 0 &&
+                checkDate.day == taskStart.day;
+            break;
+          case 'Years':
+            final yearsDiff = checkDate.year - taskStart.year;
+            occurs = yearsDiff >= 0 &&
+                yearsDiff % customInterval == 0 &&
+                checkDate.month == taskStart.month &&
+                checkDate.day == taskStart.day;
+            break;
+          default:
+            occurs = daysDiff % customInterval == 0;
+        }
+
+        if (!occurs) return false;
+
+        // Check 'After N occurrences' end condition
+        if (customEndType == 'After') {
+          int occurrenceIndex;
+          switch (customIntervalUnit) {
+            case 'Days':
+              occurrenceIndex = daysDiff ~/ customInterval + 1;
+              break;
+            case 'Weeks':
+              final weeksDiff2 = daysDiff ~/ 7;
+              occurrenceIndex = weeksDiff2 ~/ customInterval + 1;
+              break;
+            case 'Months':
+              final monthsDiff2 = (checkDate.year - taskStart.year) * 12 +
+                  (checkDate.month - taskStart.month);
+              occurrenceIndex = monthsDiff2 ~/ customInterval + 1;
+              break;
+            case 'Years':
+              final yearsDiff2 = checkDate.year - taskStart.year;
+              occurrenceIndex = yearsDiff2 ~/ customInterval + 1;
+              break;
+            default:
+              occurrenceIndex = daysDiff ~/ customInterval + 1;
+          }
+          if (occurrenceIndex > customEndAfterCount) return false;
+        }
+
+        return true;
+    }
   }
 
   // ── Checklist progress ────────────────────────────────────────────────────
