@@ -90,16 +90,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         systemNavigationBarDividerColor: Colors.transparent,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF05000F),
+        backgroundColor: const Color(0xFF0D0221),
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // ── Background image (aurora / night sky from Unsplash, Unsplash License) ──
+            // ── Background image (office discussion/meeting from Unsplash, Unsplash License) ──
             FadeTransition(
               opacity:
                   CurvedAnimation(parent: _bgController, curve: Curves.easeIn),
               child: Image.network(
-                'https://images.unsplash.com/photo-1531366936337-7c912a4589a7'
+                'https://images.unsplash.com/photo-1552664730-d307ca884978'
                 '?auto=format&fit=crop&w=800&q=80',
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => Container(
@@ -108,10 +108,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        Color(0xFF05000F),
-                        Color(0xFF1A0533),
-                        Color(0xFF0D1B4D),
-                        Color(0xFF05000F),
+                        Color(0xFF1E40AF),
+                        Color(0xFF0F172A),
+                        Color(0xFF0D0221),
+                        Color(0xFF0D0221),
                       ],
                       stops: [0.0, 0.35, 0.7, 1.0],
                     ),
@@ -128,9 +128,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                   end: Alignment.bottomCenter,
                   stops: const [0.0, 0.38, 0.75, 1.0],
                   colors: [
-                    const Color(0xFF05000F).withValues(alpha: 0.45),
-                    const Color(0xFF0D0221).withValues(alpha: 0.60),
-                    const Color(0xFF0D0221).withValues(alpha: 0.88),
+                    const Color(0xFF0D0221).withValues(alpha: 0.35),
+                    const Color(0xFF0D0221).withValues(alpha: 0.55),
+                    const Color(0xFF0D0221).withValues(alpha: 0.85),
                     const Color(0xFF0D0221).withValues(alpha: 0.98),
                   ],
                 ),
@@ -169,8 +169,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                         child: Transform.scale(
                           scale: logoScale,
                           child: SizedBox(
-                            width: 160,
-                            height: 160,
+                            width: 180,
+                            height: 180,
                             child: Stack(
                               alignment: Alignment.center,
                               children: [
@@ -180,12 +180,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                                   child: Transform.scale(
                                     scale: 0.62 + ringProgress * 0.55,
                                     child: Container(
-                                      width: 160,
-                                      height: 160,
+                                      width: 180,
+                                      height: 180,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         border: Border.all(
-                                          color: const Color(0xFF7C3AED)
+                                          color: const Color(0xFF3B82F6)
                                               .withValues(alpha: 0.35),
                                           width: 1.5,
                                         ),
@@ -202,12 +202,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                                     scale: 0.62 +
                                         ((ringProgress + 0.5) % 1.0) * 0.55,
                                     child: Container(
-                                      width: 160,
-                                      height: 160,
+                                      width: 180,
+                                      height: 180,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         border: Border.all(
-                                          color: const Color(0xFF4F46E5)
+                                          color: const Color(0xFF60A5FA)
                                               .withValues(alpha: 0.25),
                                           width: 1,
                                         ),
@@ -217,37 +217,37 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                                 ),
                                 // Logo circle
                                 Container(
-                                  width: 96,
-                                  height: 96,
+                                  width: 130,
+                                  height: 130,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     gradient: const LinearGradient(
                                       begin: Alignment.topLeft,
                                       end: Alignment.bottomRight,
                                       colors: [
-                                        Color(0xFF9B5CF6),
-                                        Color(0xFF4F46E5),
+                                        Colors.white,
+                                        Color(0xFFF1F5F9),
                                       ],
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFF7C3AED)
-                                            .withValues(alpha: 0.65),
+                                        color: const Color(0xFF3B82F6)
+                                            .withValues(alpha: 0.5),
                                         blurRadius: glowRadius,
                                         spreadRadius: glowRadius / 6,
                                       ),
                                       BoxShadow(
-                                        color: const Color(0xFF4F46E5)
-                                            .withValues(alpha: 0.35),
+                                        color: const Color(0xFF1E40AF)
+                                            .withValues(alpha: 0.3),
                                         blurRadius: glowRadius * 1.8,
                                         spreadRadius: 0,
                                       ),
                                     ],
                                   ),
                                   child: Padding(
-                                    padding: const EdgeInsets.all(14),
+                                    padding: const EdgeInsets.all(0),
                                     child: Image.asset(
-                                      'assets/icon-launcher-2.png',
+                                      'assets/icon-launcher-2-transparent.png',
                                       fit: BoxFit.contain,
                                     ),
                                   ),
@@ -295,11 +295,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 18, vertical: 5),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF7C3AED)
+                                  color: const Color(0xFF3B82F6)
                                       .withValues(alpha: 0.22),
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
-                                    color: const Color(0xFF7C3AED)
+                                    color: const Color(0xFF3B82F6)
                                         .withValues(alpha: 0.35),
                                     width: 1,
                                   ),
@@ -353,7 +353,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                                 backgroundColor:
                                     Colors.white.withValues(alpha: 0.12),
                                 valueColor: const AlwaysStoppedAnimation(
-                                  Color(0xFF7C3AED),
+                                  Color(0xFF3B82F6),
                                 ),
                               ),
                             ),

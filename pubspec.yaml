@@ -46,5 +46,6 @@ flutter:
 
   assets:
     - assets/icon-launcher-2.png
+    - assets/icon-launcher-2-transparent.png
     - assets/banner.png
     - assets/music/

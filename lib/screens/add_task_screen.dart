@@ -620,7 +620,7 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
       children: [
         // ── Flat checklist ──────────────────────────────────────────────
         _clSubHeader(context, Icons.checklist_rounded, 'Checklist'),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         ..._checklist.asMap().entries.map((e) {
           final i = e.key;
           final item = e.value;
@@ -634,6 +634,11 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
               _controllers.remove(item.id);
               setState(() => _checklist.removeAt(i));
             },
+            onSubmitted: () {
+              setState(() {
+                _checklist.add(ChecklistItem(id: _uid(), title: ''));
+              });
+            },
           );
         }),
         _addItemBtn(context, 'Add Checklist Item', () {
@@ -641,11 +646,11 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
             _checklist.add(ChecklistItem(id: _uid(), title: ''));
           });
         }, primary),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
 
         // ── Sub-tasks ───────────────────────────────────────────────────
         _clSubHeader(context, Icons.account_tree_rounded, 'Sub-tasks'),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         for (final st in _subTasks)
           _buildSubTaskNode(context, isDark, st, 0, primary, textSecondary),
         _addItemBtn(context, 'Add Sub-task', () {
@@ -674,7 +679,7 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
     final leftPad = depth * 16.0;
     final card = isDark ? darkCard : lightCard;
     return Padding(
-      padding: EdgeInsets.only(left: leftPad, bottom: 6),
+      padding: EdgeInsets.only(left: leftPad, bottom: 8),
       child: Container(
         decoration: BoxDecoration(
           color: card,
@@ -686,32 +691,33 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
           children: [
             // Sub-task title row
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Row(
                 children: [
                   Icon(Icons.drag_handle_rounded,
-                      size: 16, color: textSecondary),
-                  const SizedBox(width: 4),
+                      size: 20, color: textSecondary),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: TextField(
                       controller: _ctrl(st.id, st.title),
+                      textInputAction: TextInputAction.done,
                       decoration: const InputDecoration(
                         hintText: 'Sub-task title...',
                         border: InputBorder.none,
                         isDense: true,
                         contentPadding:
-                            EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                            EdgeInsets.symmetric(vertical: 12, horizontal: 4),
                       ),
                       style: Theme.of(context)
                           .textTheme
                           .bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
+                          ?.copyWith(fontWeight: FontWeight.w600, fontSize: 16),
                     ),
                   ),
                   IconButton(
                     icon: Icon(Icons.delete_outline_rounded,
-                        size: 18, color: Colors.red.withValues(alpha: 0.7)),
-                    splashRadius: 18,
+                        size: 22, color: Colors.red.withValues(alpha: 0.7)),
+                    splashRadius: 20,
                     onPressed: () {
                       _controllers.remove(st.id);
                       setState(() {
@@ -726,23 +732,23 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
             // Nested checklist
             if (st.checklist.isNotEmpty || true) ...[
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 8, 4),
+                padding: const EdgeInsets.fromLTRB(16, 4, 8, 6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
                         Icon(Icons.checklist_rounded,
-                            size: 15, color: textSecondary),
+                            size: 18, color: textSecondary),
                         const SizedBox(width: 6),
                         Text('Checklist',
                             style: TextStyle(
-                                fontSize: 13,
+                                fontSize: 14,
                                 color: textSecondary,
                                 fontWeight: FontWeight.w700)),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     for (int i = 0; i < st.checklist.length; i++)
                       _clItemRow(
                         context,
@@ -762,6 +768,16 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
                                     checklist: t.checklist
                                         .where((c) => c.id != cid)
                                         .toList()));
+                          });
+                        },
+                        onSubmitted: () {
+                          final newItem = ChecklistItem(id: _uid(), title: '');
+                          setState(() {
+                            _subTasks = _updateSubTaskNode(
+                                _subTasks,
+                                st.id,
+                                (t) => t.copyWith(
+                                    checklist: [...t.checklist, newItem]));
                           });
                         },
                       ),
@@ -788,18 +804,18 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
 
             // Nested sub-tasks
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 8, 6),
+              padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
                       Icon(Icons.account_tree_rounded,
-                          size: 15, color: textSecondary),
+                          size: 18, color: textSecondary),
                       const SizedBox(width: 6),
                       Text('Sub-tasks',
                           style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 14,
                               color: textSecondary,
                               fontWeight: FontWeight.w700)),
                     ],
@@ -929,13 +945,13 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
     final primary = Theme.of(context).colorScheme.primary;
     return Row(
       children: [
-        Icon(icon, size: 18, color: primary),
+        Icon(icon, size: 22, color: primary),
         const SizedBox(width: 8),
         Text(
           label,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w700,
-                fontSize: 15,
+                fontSize: 16,
               ),
         ),
       ],
@@ -949,36 +965,40 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
     required String initialText,
     required String hint,
     required VoidCallback onDelete,
+    VoidCallback? onSubmitted,
     bool compact = false,
   }) {
     final textSecondary = Theme.of(context).textTheme.bodyMedium?.color;
     return Padding(
-      padding: EdgeInsets.only(bottom: compact ? 4 : 6),
+      padding: EdgeInsets.only(bottom: compact ? 6 : 8),
       child: Row(
         children: [
           Icon(Icons.radio_button_unchecked_rounded,
-              size: compact ? 14 : 16, color: textSecondary),
-          const SizedBox(width: 6),
+              size: compact ? 18 : 22, color: textSecondary),
+          const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: _ctrl(id, initialText),
+              textInputAction: TextInputAction.next,
+              onSubmitted: onSubmitted != null ? (_) => onSubmitted() : null,
               decoration: InputDecoration(
                 hintText: hint,
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: EdgeInsets.symmetric(
-                    vertical: compact ? 6 : 8, horizontal: 0),
+                    vertical: compact ? 10 : 12, horizontal: 4),
               ),
               style: Theme.of(context)
                   .textTheme
                   .bodyMedium
-                  ?.copyWith(fontSize: compact ? 12 : 14),
+                  ?.copyWith(fontSize: compact ? 14 : 16),
             ),
           ),
+          const SizedBox(width: 4),
           GestureDetector(
             onTap: onDelete,
             child: Icon(Icons.close_rounded,
-                size: compact ? 14 : 16,
+                size: compact ? 18 : 22,
                 color: Colors.red.withValues(alpha: 0.6)),
           ),
         ],
@@ -994,24 +1014,24 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
     bool compact = false,
   }) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: compact ? 3 : 6),
+      padding: EdgeInsets.symmetric(vertical: compact ? 4 : 8),
       child: OutlinedButton.icon(
         onPressed: onTap,
         style: OutlinedButton.styleFrom(
           foregroundColor: primary,
           side: BorderSide(color: primary.withValues(alpha: 0.4), width: 1.2),
           padding: EdgeInsets.symmetric(
-              horizontal: compact ? 10 : 14, vertical: compact ? 7 : 10),
+              horizontal: compact ? 12 : 16, vertical: compact ? 10 : 12),
           minimumSize: Size.zero,
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(compact ? 8 : 10)),
         ),
-        icon: Icon(Icons.add_rounded, size: compact ? 15 : 17),
+        icon: Icon(Icons.add_rounded, size: compact ? 18 : 20),
         label: Text(
           label,
           style: TextStyle(
-              fontSize: compact ? 12 : 13, fontWeight: FontWeight.w600),
+              fontSize: compact ? 14 : 15, fontWeight: FontWeight.w600),
         ),
       ),
     );
