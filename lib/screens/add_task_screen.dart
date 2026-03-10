@@ -7,6 +7,7 @@ import '../data/dummy_data.dart';
 import '../theme/app_colors.dart';
 import '../services/audio_service.dart';
 import '../utils/app_toast.dart';
+import '../widgets/simple_checklist_dialog.dart';
 import 'login_screen.dart';
 
 const _months = [
@@ -26,8 +27,15 @@ const _months = [
 
 class AddTaskScreen extends ConsumerStatefulWidget {
   final TaskModel? editTask;
+  final SubTask? editSubTask;
+  final bool isSubTaskMode;
 
-  const AddTaskScreen({super.key, this.editTask});
+  const AddTaskScreen({
+    super.key,
+    this.editTask,
+    this.editSubTask,
+    this.isSubTaskMode = false,
+  });
 
   @override
   ConsumerState<AddTaskScreen> createState() => _AddTaskScreenState();
@@ -58,59 +66,196 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
   // ── Unique ID generator ───────────────────────────────────────────────────
   String _uid() => DateTime.now().microsecondsSinceEpoch.toString();
 
+  // ── Helper: Replace subtask by ID (recursive) ──────────────────────────────
+  void _replaceSubTask(String id, SubTask newSubTask) {
+    for (int i = 0; i < _subTasks.length; i++) {
+      if (_subTasks[i].id == id) {
+        _subTasks[i] = newSubTask;
+        return;
+      } else if (_subTasks[i].subTasks.isNotEmpty) {
+        _subTasks[i] = _subTasks[i].copyWith(
+          subTasks: _replaceSubTaskInList(_subTasks[i].subTasks, id, newSubTask),
+        );
+      }
+    }
+  }
+
+  List<SubTask> _replaceSubTaskInList(List<SubTask> subTasks, String id, SubTask newSubTask) {
+    return subTasks.map((st) {
+      if (st.id == id) {
+        return newSubTask;
+      } else if (st.subTasks.isNotEmpty) {
+        return st.copyWith(
+          subTasks: _replaceSubTaskInList(st.subTasks, id, newSubTask),
+        );
+      }
+      return st;
+    }).toList();
+  }
+
+  // ── Helper: Remove subtask by ID (recursive) ───────────────────────────────
+  void _removeSubTask(String id) {
+    _subTasks.removeWhere((st) => st.id == id);
+    for (int i = 0; i < _subTasks.length; i++) {
+      if (_subTasks[i].subTasks.isNotEmpty) {
+        _subTasks[i] = _subTasks[i].copyWith(
+          subTasks: _removeSubTaskFromList(_subTasks[i].subTasks, id),
+        );
+      }
+    }
+  }
+
+  List<SubTask> _removeSubTaskFromList(List<SubTask> subTasks, String id) {
+    final filtered = subTasks.where((st) => st.id != id).toList();
+    return filtered.map((st) {
+      if (st.subTasks.isNotEmpty) {
+        return st.copyWith(
+          subTasks: _removeSubTaskFromList(st.subTasks, id),
+        );
+      }
+      return st;
+    }).toList();
+  }
+
+  // ── Helper: Add nested subtask to parent by ID (recursive) ─────────────────
+  void _addNestedSubTask(String parentId, SubTask newSubTask) {
+    for (int i = 0; i < _subTasks.length; i++) {
+      if (_subTasks[i].id == parentId) {
+        _subTasks[i] = _subTasks[i].copyWith(
+          subTasks: [..._subTasks[i].subTasks, newSubTask],
+        );
+        return;
+      } else if (_subTasks[i].subTasks.isNotEmpty) {
+        _subTasks[i] = _subTasks[i].copyWith(
+          subTasks: _addNestedSubTaskToList(_subTasks[i].subTasks, parentId, newSubTask),
+        );
+      }
+    }
+  }
+
+  List<SubTask> _addNestedSubTaskToList(List<SubTask> subTasks, String parentId, SubTask newSubTask) {
+    return subTasks.map((st) {
+      if (st.id == parentId) {
+        return st.copyWith(
+          subTasks: [...st.subTasks, newSubTask],
+        );
+      } else if (st.subTasks.isNotEmpty) {
+        return st.copyWith(
+          subTasks: _addNestedSubTaskToList(st.subTasks, parentId, newSubTask),
+        );
+      }
+      return st;
+    }).toList();
+  }
+
   @override
   void initState() {
     super.initState();
+    // Initialize from either editTask or editSubTask
     if (widget.editTask != null) {
-      final t = widget.editTask!;
-      _titleCtrl.text = t.title;
-      _descCtrl.text = t.description;
-      _checklist = List.from(t.checklist);
-      _subTasks = List.from(t.subTasks);
-      _autoCompleteOnChecklist = t.autoCompleteOnChecklist;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final n = ref.read(addTaskFormProvider.notifier);
-        n.setTitle(t.title);
-        n.setDescription(t.description);
-        n.setCategory(t.category);
-        n.setDate(t.date);
-        n.setTime(t.time);
-        n.setAlarmMode(t.alarmMode);
-        n.setMusicFile(t.musicFile);
-        n.setVolume(t.volume.toDouble());
-        n.setSnooze(t.snoozeMinutes);
-        n.setRepeat(t.repeat);
-        if (t.repeat == RepeatType.custom) {
-          _customInterval = t.customInterval;
-          _customIntervalUnit = t.customIntervalUnit;
-          _customEndType = t.customEndType;
-          _customEndDate = t.customEndDate;
-          _customEndAfterCount = t.customEndAfterCount;
-          for (int i = 0; i < 7; i++) {
-            _customWeekDays[i] = t.customWeekDays[i];
-          }
-        }
-        n.setPriority(t.priority);
-        n.setColorTag(t.colorTag);
-        n.setStatus(t.status);
-        // Due date fields
-        n.toggleDueDate(t.dueDateEnabled);
-        if (t.dueDate != null) n.setDueDate(t.dueDate!);
-        if (t.dueTime != null) n.setDueTime(t.dueTime!);
-        n.toggleDueReminder(t.dueReminderEnabled);
-        for (final r in t.dueReminders) {
-          n.addDueReminder(r);
-        }
-        n.setDueAlarmMode(t.dueAlarmMode);
-        n.setDueMusicFile(t.dueMusicFile);
-        n.setDueVolume(t.dueVolume.toDouble());
-        n.setDueSnooze(t.dueSnoozeMinutes);
-      });
+      _initFromTask(widget.editTask!);
+    } else if (widget.editSubTask != null) {
+      _initFromSubTask(widget.editSubTask!);
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(addTaskFormProvider.notifier).reset();
       });
     }
+  }
+
+  // ── Initialize form from Task ───────────────────────────────────────────────
+  void _initFromTask(TaskModel t) {
+    _titleCtrl.text = t.title;
+    _descCtrl.text = t.description;
+    _checklist = List.from(t.checklist);
+    _subTasks = List.from(t.subTasks);
+    _autoCompleteOnChecklist = t.autoCompleteOnChecklist;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final n = ref.read(addTaskFormProvider.notifier);
+      n.setTitle(t.title);
+      n.setDescription(t.description);
+      n.setCategory(t.category);
+      n.setDate(t.date);
+      n.setTime(t.time);
+      n.setAlarmMode(t.alarmMode);
+      n.setMusicFile(t.musicFile);
+      n.setVolume(t.volume.toDouble());
+      n.setSnooze(t.snoozeMinutes);
+      n.setRepeat(t.repeat);
+      if (t.repeat == RepeatType.custom) {
+        _customInterval = t.customInterval;
+        _customIntervalUnit = t.customIntervalUnit;
+        _customEndType = t.customEndType;
+        _customEndDate = t.customEndDate;
+        _customEndAfterCount = t.customEndAfterCount;
+        for (int i = 0; i < 7; i++) {
+          _customWeekDays[i] = t.customWeekDays[i];
+        }
+      }
+      n.setPriority(t.priority);
+      n.setColorTag(t.colorTag);
+      n.setStatus(t.status);
+      // Due date fields
+      n.toggleDueDate(t.dueDateEnabled);
+      if (t.dueDate != null) n.setDueDate(t.dueDate!);
+      if (t.dueTime != null) n.setDueTime(t.dueTime!);
+      n.toggleDueReminder(t.dueReminderEnabled);
+      for (final r in t.dueReminders) {
+        n.addDueReminder(r);
+      }
+      n.setDueAlarmMode(t.dueAlarmMode);
+      n.setDueMusicFile(t.dueMusicFile);
+      n.setDueVolume(t.dueVolume.toDouble());
+      n.setDueSnooze(t.dueSnoozeMinutes);
+    });
+  }
+
+  // ── Initialize form from SubTask ────────────────────────────────────────────
+  void _initFromSubTask(SubTask st) {
+    _titleCtrl.text = st.title;
+    _descCtrl.text = st.description;
+    _checklist = List.from(st.checklist);
+    // Load nested subtasks
+    _subTasks = List.from(st.subTasks);
+    _autoCompleteOnChecklist = st.autoCompleteOnChecklist;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final n = ref.read(addTaskFormProvider.notifier);
+      n.setTitle(st.title);
+      n.setDescription(st.description);
+      n.setCategory(st.category);
+      n.setDate(st.date);
+      n.setTime(st.time);
+      n.setAlarmMode(st.alarmMode);
+      n.setMusicFile(st.musicFile);
+      n.setVolume(st.volume.toDouble());
+      n.setSnooze(st.snoozeMinutes);
+      n.setRepeat(st.repeat);
+      if (st.repeat == RepeatType.custom) {
+        _customInterval = st.customInterval;
+        _customIntervalUnit = st.customIntervalUnit;
+        _customEndType = st.customEndType;
+        _customEndDate = st.customEndDate;
+        _customEndAfterCount = st.customEndAfterCount;
+        for (int i = 0; i < 7; i++) {
+          _customWeekDays[i] = st.customWeekDays[i];
+        }
+      }
+      n.setPriority(st.priority);
+      n.setColorTag(st.colorTag);
+      n.setStatus(st.status);
+      // Due date fields
+      n.toggleDueDate(st.dueDateEnabled);
+      if (st.dueDate != null) n.setDueDate(st.dueDate!);
+      if (st.dueTime != null) n.setDueTime(st.dueTime!);
+      n.toggleDueReminder(st.dueReminderEnabled);
+      for (final r in st.dueReminders) {
+        n.addDueReminder(r);
+      }
+      n.setDueAlarmMode(st.dueAlarmMode);
+      n.setDueMusicFile(st.dueMusicFile);
+      n.setDueVolume(st.dueVolume.toDouble());
+      n.setDueSnooze(st.dueSnoozeMinutes);
+    });
   }
 
   @override
@@ -132,8 +277,13 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-            widget.editTask != null ? 'Edit Schedule' : 'Add New Schedule'),
+        title: Text(widget.isSubTaskMode
+            ? (widget.editSubTask != null
+                ? 'Edit Sub-task'
+                : 'Add New Sub-task')
+            : (widget.editTask != null
+                ? 'Edit Schedule'
+                : 'Add New Schedule')),
         leading: IconButton(
           icon: const Icon(Icons.close_rounded),
           onPressed: () => Navigator.pop(context),
@@ -143,7 +293,7 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
         padding: const EdgeInsets.all(20),
         children: [
           // ── Local storage badge (visible only when not logged in) ─────────
-          if (!isLoggedIn && widget.editTask == null) ...[
+          if (!isLoggedIn && widget.editTask == null && !widget.isSubTaskMode) ...[
             _buildLocalStorageBanner(context, isDark),
             const SizedBox(height: 16),
           ],
@@ -161,10 +311,18 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
           _section(context, '⑤ Priority & Color Tag',
               _buildPriorityColor(context, form, card)),
           const SizedBox(height: 16),
-          _section(context, '⑥ Checklist & Sub-tasks',
-              _buildChecklistSubtasks(context, isDark, card)),
-          const SizedBox(height: 16),
-          if (widget.editTask != null) ...[
+          // ── Hide subtasks section when in subtask mode ─────────────────────
+          if (!widget.isSubTaskMode) ...[
+            _section(context, '⑥ Checklist & Sub-tasks',
+                _buildChecklistSubtasks(context, isDark, card)),
+            const SizedBox(height: 16),
+          ] else ...[
+            // Show only checklist in subtask mode
+            _section(context, '⑥ Checklist',
+                _buildChecklistOnly(context, isDark, card)),
+            const SizedBox(height: 16),
+          ],
+          if (widget.editTask != null || widget.editSubTask != null) ...[
             _section(
                 context, '⑦ Status', _buildStatusSelector(context, form, card)),
             const SizedBox(height: 16),
@@ -183,7 +341,9 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _save,
                   icon: const Icon(Icons.save_rounded, size: 18),
-                  label: const Text('Save Schedule'),
+                  label: Text(widget.isSubTaskMode
+                      ? 'Save Sub-task'
+                      : 'Save Schedule'),
                 ),
               ),
             ],
@@ -441,6 +601,63 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
     }
     // Sync text controllers into data before saving
     final syncedChecklist = _syncChecklistCtrls(_checklist);
+
+    // ── SubTask mode: create SubTask and pop ──────────────────────────────────
+    if (widget.isSubTaskMode) {
+      final syncedSubTasks = _syncSubTasksCtrls(_subTasks);
+      final newSubTask = SubTask(
+        id: widget.editSubTask?.id ??
+            DateTime.now().millisecondsSinceEpoch.toString(),
+        title: form.title,
+        description: form.description,
+        category: form.category,
+        status: () {
+          if (widget.editSubTask != null && form.hasStatus && form.status != null) {
+            return form.status!;
+          }
+          final taskDay =
+              DateTime(form.date.year, form.date.month, form.date.day);
+          final now = DateTime.now();
+          final todayDay = DateTime(now.year, now.month, now.day);
+          return taskDay.isAfter(todayDay)
+              ? TaskStatus.upcoming
+              : TaskStatus.todo;
+        }(),
+        priority: form.priority,
+        date: form.date,
+        time: form.time,
+        alarmMode: form.alarmMode,
+        musicFile: form.musicFile,
+        volume: form.volume.round(),
+        snoozeMinutes: form.snoozeMinutes,
+        dueDateEnabled: form.dueDateEnabled,
+        dueDate: form.dueDate,
+        dueTime: form.dueTime,
+        dueReminderEnabled: form.dueReminderEnabled,
+        dueReminders: form.dueReminders,
+        dueAlarmMode: form.dueAlarmMode,
+        dueMusicFile: form.dueMusicFile,
+        dueVolume: form.dueVolume.round(),
+        dueSnoozeMinutes: form.dueSnoozeMinutes,
+        repeat: form.repeat,
+        weekDays: form.weekDays,
+        customInterval: _customInterval,
+        customIntervalUnit: _customIntervalUnit,
+        customEndType: _customEndType,
+        customEndDate: _customEndDate,
+        customEndAfterCount: _customEndAfterCount,
+        customWeekDays: List.from(_customWeekDays),
+        reminders: form.reminders,
+        colorTag: form.colorTag,
+        checklist: syncedChecklist,
+        subTasks: syncedSubTasks,
+        autoCompleteOnChecklist: _autoCompleteOnChecklist,
+      );
+      Navigator.pop(context, newSubTask);
+      return;
+    }
+
+    // ── Task mode: create TaskModel and save to provider ──────────────────────
     final syncedSubTasks = _syncSubTasksCtrls(_subTasks);
     final newTask = TaskModel(
       id: widget.editTask?.id ??
@@ -583,28 +800,12 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
   List<SubTask> _syncSubTasksCtrls(List<SubTask> tasks) => tasks
       .map((st) {
         final t = _controllers[st.id]?.text.trim() ?? st.title;
-        return SubTask(
-          id: st.id,
+        return st.copyWith(
           title: t,
-          isChecked: st.isChecked,
           checklist: _syncChecklistCtrls(st.checklist),
-          subTasks: _syncSubTasksCtrls(st.subTasks),
         );
       })
       .where((st) => st.title.isNotEmpty)
-      .toList();
-
-  List<SubTask> _updateSubTaskNode(
-          List<SubTask> tasks, String id, SubTask Function(SubTask) fn) =>
-      tasks
-          .map((t) => t.id == id
-              ? fn(t)
-              : t.copyWith(subTasks: _updateSubTaskNode(t.subTasks, id, fn)))
-          .toList();
-
-  List<SubTask> _removeSubTaskNode(List<SubTask> tasks, String id) => tasks
-      .where((t) => t.id != id)
-      .map((t) => t.copyWith(subTasks: _removeSubTaskNode(t.subTasks, id)))
       .toList();
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -630,6 +831,15 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
             id: item.id,
             initialText: item.title,
             hint: 'Checklist item...',
+            onEdit: () async {
+              final result = await showDialog<ChecklistItem>(
+                context: context,
+                builder: (_) => SimpleChecklistDialog(editItem: item),
+              );
+              if (result != null) {
+                setState(() => _checklist[i] = result);
+              }
+            },
             onDelete: () {
               _controllers.remove(item.id);
               setState(() => _checklist.removeAt(i));
@@ -641,11 +851,21 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
             },
           );
         }),
-        _addItemBtn(context, 'Add Checklist Item', () {
-          setState(() {
-            _checklist.add(ChecklistItem(id: _uid(), title: ''));
-          });
-        }, primary),
+        Row(
+          children: [
+            Expanded(
+              child: _addItemBtn(context, 'Add Checklist', () async {
+                final result = await showDialog<ChecklistItem>(
+                  context: context,
+                  builder: (_) => const SimpleChecklistDialog(),
+                );
+                if (result != null) {
+                  setState(() => _checklist.add(result));
+                }
+              }, primary),
+            ),
+          ],
+        ),
         const SizedBox(height: 20),
 
         // ── Sub-tasks ───────────────────────────────────────────────────
@@ -653,11 +873,125 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
         const SizedBox(height: 8),
         for (final st in _subTasks)
           _buildSubTaskNode(context, isDark, st, 0, primary, textSecondary),
-        _addItemBtn(context, 'Add Sub-task', () {
-          setState(() {
-            _subTasks.add(SubTask(id: _uid(), title: ''));
-          });
-        }, primary),
+        Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: _addItemBtn(
+                context,
+                'Add Sub-task',
+                () async {
+                  final result = await Navigator.push<SubTask>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AddTaskScreen(isSubTaskMode: true),
+                    ),
+                  );
+                  if (result != null) {
+                    setState(() => _subTasks.add(result));
+                  }
+                },
+                primary,
+                icon: Icons.add_rounded,
+              ),
+            ),
+          ],
+        ),
+
+        // ── Auto-complete toggle ────────────────────────────────────────
+        if (_checklist.isNotEmpty || _subTasks.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _buildAutoCompleteToggle(context, primary, textSecondary),
+        ],
+      ],
+    );
+  }
+
+  // ── Checklist & Sub-tasks (for subtask mode) ───────────────────────────────
+  Widget _buildChecklistOnly(BuildContext context, bool isDark, Color card) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final textSecondary = Theme.of(context).textTheme.bodyMedium?.color;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Flat checklist ──────────────────────────────────────────────
+        _clSubHeader(context, Icons.checklist_rounded, 'Checklist'),
+        const SizedBox(height: 8),
+        ..._checklist.asMap().entries.map((e) {
+          final i = e.key;
+          final item = e.value;
+          return _clItemRow(
+            context,
+            isDark,
+            id: item.id,
+            initialText: item.title,
+            hint: 'Checklist item...',
+            onEdit: () async {
+              final result = await showDialog<ChecklistItem>(
+                context: context,
+                builder: (_) => SimpleChecklistDialog(editItem: item),
+              );
+              if (result != null) {
+                setState(() => _checklist[i] = result);
+              }
+            },
+            onDelete: () {
+              _controllers.remove(item.id);
+              setState(() => _checklist.removeAt(i));
+            },
+            onSubmitted: () {
+              setState(() {
+                _checklist.add(ChecklistItem(id: _uid(), title: ''));
+              });
+            },
+          );
+        }),
+        Row(
+          children: [
+            Expanded(
+              child: _addItemBtn(context, 'Add Checklist', () async {
+                final result = await showDialog<ChecklistItem>(
+                  context: context,
+                  builder: (_) => const SimpleChecklistDialog(),
+                );
+                if (result != null) {
+                  setState(() => _checklist.add(result));
+                }
+              }, primary),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 20),
+
+        // ── Nested Sub-tasks ────────────────────────────────────────────
+        _clSubHeader(context, Icons.account_tree_rounded, 'Sub-tasks'),
+        const SizedBox(height: 8),
+        for (final st in _subTasks)
+          _buildSubTaskNode(context, isDark, st, 0, primary, textSecondary),
+        Row(
+          children: [
+            Expanded(
+              child: _addItemBtn(
+                context,
+                'Add Sub-task',
+                () async {
+                  final result = await Navigator.push<SubTask>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AddTaskScreen(isSubTaskMode: true),
+                    ),
+                  );
+                  if (result != null) {
+                    setState(() => _subTasks.add(result));
+                  }
+                },
+                primary,
+                icon: Icons.add_rounded,
+              ),
+            ),
+          ],
+        ),
 
         // ── Auto-complete toggle ────────────────────────────────────────
         if (_checklist.isNotEmpty || _subTasks.isNotEmpty) ...[
@@ -686,164 +1020,133 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: primary.withValues(alpha: 0.15), width: 1),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Sub-task title row
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Row(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Sub-task header
+              Row(
                 children: [
-                  Icon(Icons.drag_handle_rounded,
-                      size: 20, color: textSecondary),
-                  const SizedBox(width: 6),
+                  Icon(Icons.task_alt_rounded, size: 20, color: primary),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: TextField(
-                      controller: _ctrl(st.id, st.title),
-                      textInputAction: TextInputAction.done,
-                      decoration: const InputDecoration(
-                        hintText: 'Sub-task title...',
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding:
-                            EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-                      ),
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w600, fontSize: 16),
+                    child: Text(
+                      st.title.isEmpty ? '(No title)' : st.title,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
                     ),
                   ),
                   IconButton(
-                    icon: Icon(Icons.delete_outline_rounded,
-                        size: 22, color: Colors.red.withValues(alpha: 0.7)),
+                    icon: Icon(Icons.edit_rounded,
+                        size: 20, color: textSecondary),
                     splashRadius: 20,
+                    tooltip: 'Edit sub-task',
+                    onPressed: () async {
+                      final result = await Navigator.push<SubTask>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AddTaskScreen(
+                            isSubTaskMode: true,
+                            editSubTask: st,
+                          ),
+                        ),
+                      );
+                      if (result != null) {
+                        setState(() {
+                          _replaceSubTask(st.id, result);
+                        });
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.delete_outline_rounded,
+                        size: 20, color: Colors.red.withValues(alpha: 0.7)),
+                    splashRadius: 20,
+                    tooltip: 'Delete sub-task',
                     onPressed: () {
                       _controllers.remove(st.id);
                       setState(() {
-                        _subTasks = _removeSubTaskNode(_subTasks, st.id);
+                        _removeSubTask(st.id);
                       });
                     },
                   ),
                 ],
               ),
-            ),
-
-            // Nested checklist
-            if (st.checklist.isNotEmpty || true) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 8, 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.checklist_rounded,
-                            size: 18, color: textSecondary),
-                        const SizedBox(width: 6),
-                        Text('Checklist',
-                            style: TextStyle(
-                                fontSize: 14,
-                                color: textSecondary,
-                                fontWeight: FontWeight.w700)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    for (int i = 0; i < st.checklist.length; i++)
-                      _clItemRow(
-                        context,
-                        isDark,
-                        id: st.checklist[i].id,
-                        initialText: st.checklist[i].title,
-                        hint: 'Checklist item...',
-                        compact: true,
-                        onDelete: () {
-                          final cid = st.checklist[i].id;
-                          _controllers.remove(cid);
-                          setState(() {
-                            _subTasks = _updateSubTaskNode(
-                                _subTasks,
-                                st.id,
-                                (t) => t.copyWith(
-                                    checklist: t.checklist
-                                        .where((c) => c.id != cid)
-                                        .toList()));
-                          });
-                        },
-                        onSubmitted: () {
-                          final newItem = ChecklistItem(id: _uid(), title: '');
-                          setState(() {
-                            _subTasks = _updateSubTaskNode(
-                                _subTasks,
-                                st.id,
-                                (t) => t.copyWith(
-                                    checklist: [...t.checklist, newItem]));
-                          });
-                        },
-                      ),
-                    _addItemBtn(
-                      context,
-                      'Add Checklist Item',
-                      () {
-                        final newItem = ChecklistItem(id: _uid(), title: '');
-                        setState(() {
-                          _subTasks = _updateSubTaskNode(
-                              _subTasks,
-                              st.id,
-                              (t) => t.copyWith(
-                                  checklist: [...t.checklist, newItem]));
-                        });
-                      },
-                      primary,
-                      compact: true,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
-            // Nested sub-tasks
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 8),
+              // Metadata badges
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
                 children: [
-                  Row(
-                    children: [
-                      Icon(Icons.account_tree_rounded,
-                          size: 18, color: textSecondary),
-                      const SizedBox(width: 6),
-                      Text('Sub-tasks',
-                          style: TextStyle(
-                              fontSize: 14,
-                              color: textSecondary,
-                              fontWeight: FontWeight.w700)),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  for (final child in st.subTasks)
-                    _buildSubTaskNode(
-                        context, isDark, child, 0, primary, textSecondary),
-                  _addItemBtn(
+                  if (st.dueDateEnabled && st.dueDate != null)
+                    _badge(
+                      context,
+                      Icons.calendar_today_rounded,
+                      '${st.dueDateLabel}${st.dueTime != null ? ' ${st.dueTimeLabel}' : ''}',
+                      primary,
+                    ),
+                  _badge(
                     context,
-                    'Add Sub-task',
-                    () {
-                      final newSt = SubTask(id: _uid(), title: '');
-                      setState(() {
-                        _subTasks = _updateSubTaskNode(
-                            _subTasks,
-                            st.id,
-                            (t) =>
-                                t.copyWith(subTasks: [...t.subTasks, newSt]));
-                      });
-                    },
-                    primary,
-                    compact: true,
+                    Icons.flag_rounded,
+                    st.priorityLabel,
+                    _priorityColorForBadge(st.priority),
                   ),
+                  _badge(
+                    context,
+                    Icons.folder_rounded,
+                    st.categoryLabel,
+                    textSecondary!,
+                  ),
+                  if (st.totalChecklistItems > 0)
+                    _badge(
+                      context,
+                      Icons.checklist_rounded,
+                      '${st.completedChecklistItems}/${st.totalChecklistItems}',
+                      textSecondary,
+                    ),
                 ],
               ),
-            ),
-          ],
+              // Nested subtasks
+              if (st.subTasks.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                ...st.subTasks.map((nestedSt) => _buildSubTaskNode(
+                      context,
+                      isDark,
+                      nestedSt,
+                      1,
+                      primary,
+                      textSecondary,
+                    )),
+              ],
+              // Add nested subtask button
+              if (depth < 5) ...[
+                const SizedBox(height: 8),
+                _addItemBtn(
+                  context,
+                  'Add nested sub-task',
+                  () async {
+                    final result = await Navigator.push<SubTask>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AddTaskScreen(isSubTaskMode: true),
+                      ),
+                    );
+                    if (result != null) {
+                      setState(() {
+                        _addNestedSubTask(st.id, result);
+                      });
+                    }
+                  },
+                  primary,
+                  icon: Icons.add_rounded,
+                  compact: true,
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
@@ -966,6 +1269,7 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
     required String hint,
     required VoidCallback onDelete,
     VoidCallback? onSubmitted,
+    VoidCallback? onEdit,
     bool compact = false,
   }) {
     final textSecondary = Theme.of(context).textTheme.bodyMedium?.color;
@@ -995,11 +1299,54 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
             ),
           ),
           const SizedBox(width: 4),
+          if (onEdit != null) ...[
+            GestureDetector(
+              onTap: onEdit,
+              child: Icon(Icons.edit_outlined,
+                  size: compact ? 18 : 22,
+                  color: textSecondary?.withAlpha((0.7 * 255).toInt())),
+            ),
+            const SizedBox(width: 8),
+          ],
           GestureDetector(
             onTap: onDelete,
             child: Icon(Icons.close_rounded,
                 size: compact ? 18 : 22,
                 color: Colors.red.withValues(alpha: 0.6)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _badge(
+    BuildContext context,
+    IconData icon,
+    String label,
+    Color color,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withAlpha(40),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: color.withAlpha(100),
+          width: 0.5,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
           ),
         ],
       ),
@@ -1012,6 +1359,7 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
     VoidCallback onTap,
     Color primary, {
     bool compact = false,
+    IconData? icon,
   }) {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: compact ? 4 : 8),
@@ -1027,7 +1375,7 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(compact ? 8 : 10)),
         ),
-        icon: Icon(Icons.add_rounded, size: compact ? 18 : 20),
+        icon: Icon(icon ?? Icons.add_rounded, size: compact ? 18 : 20),
         label: Text(
           label,
           style: TextStyle(
@@ -2370,5 +2718,16 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
         ),
       ),
     );
+  }
+
+  Color _priorityColorForBadge(TaskPriority priority) {
+    switch (priority) {
+      case TaskPriority.low:
+        return priorityLow;
+      case TaskPriority.medium:
+        return priorityMedium;
+      case TaskPriority.high:
+        return priorityHigh;
+    }
   }
 }

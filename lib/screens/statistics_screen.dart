@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_providers.dart';
 import '../models/task_model.dart';
+import '../models/pomodoro_model.dart';
 import '../theme/app_colors.dart';
 
 class StatisticsScreen extends ConsumerStatefulWidget {
@@ -12,7 +13,8 @@ class StatisticsScreen extends ConsumerStatefulWidget {
   ConsumerState<StatisticsScreen> createState() => _StatisticsScreenState();
 }
 
-class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
+class _StatisticsScreenState extends ConsumerState<StatisticsScreen>
+    with SingleTickerProviderStateMixin {
   int _filterType = 0; // 0=Week, 1=Month, 2=Year, 3=Range
 
   final int _currentYear = DateTime.now().year;
@@ -23,6 +25,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
 
   DateTime? _startDate;
   DateTime? _endDate;
+
+  late TabController _tabController;
 
   static const _monthNames = [
     'Jan',
@@ -51,6 +55,13 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     super.initState();
     _selectedYear = _currentYear;
     _selectedMonth = _currentMonth;
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   String get _periodLabel {
@@ -285,24 +296,50 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
     final card = isDark ? darkCard : lightCard;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Statistics')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
+      appBar: AppBar(
+        title: const Text('Statistics'),
+        bottom: TabBar(
+          controller: _tabController,
+          dividerColor: Colors.transparent,
+          indicatorSize: TabBarIndicatorSize.tab,
+          indicator: UnderlineTabIndicator(
+            borderSide: BorderSide(
+              width: 3.0,
+              color: isDark ? darkPrimary : lightPrimary,
+            ),
+            insets: const EdgeInsets.symmetric(horizontal: 16.0),
+          ),
+          tabs: const [
+            Tab(text: 'Tasks', icon: Icon(Icons.task_alt_rounded, size: 20)),
+            Tab(text: 'Pomodoro', icon: Icon(Icons.timer_outlined, size: 20)),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
         children: [
-          _buildFilterTabs(context),
-          const SizedBox(height: 12),
-          _buildSubFilter(context, card),
-          const SizedBox(height: 24),
-          _buildSummaryRow(context, card, summary),
-          const SizedBox(height: 24),
-          _buildBarChart(context, card, weekBars),
-          const SizedBox(height: 24),
-          _buildCategoryBreakdown(context, card, cats),
-          const SizedBox(height: 24),
-          _buildStreak(context, card, streak),
-          const SizedBox(height: 24),
-          _buildHeatmap(context, card, heatmap),
-          const SizedBox(height: 40),
+          // Tasks Tab
+          ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              _buildFilterTabs(context),
+              const SizedBox(height: 12),
+              _buildSubFilter(context, card),
+              const SizedBox(height: 24),
+              _buildSummaryRow(context, card, summary),
+              const SizedBox(height: 24),
+              _buildBarChart(context, card, weekBars),
+              const SizedBox(height: 24),
+              _buildCategoryBreakdown(context, card, cats),
+              const SizedBox(height: 24),
+              _buildStreak(context, card, streak),
+              const SizedBox(height: 24),
+              _buildHeatmap(context, card, heatmap),
+              const SizedBox(height: 40),
+            ],
+          ),
+          // Pomodoro Tab
+          _buildPomodoroTab(context, isDark, card),
         ],
       ),
     );
@@ -992,6 +1029,461 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
           Text('More', style: TextStyle(color: textSec, fontSize: 11)),
         ]),
       ]),
+    );
+  }
+
+  // ── Pomodoro Tab ──────────────────────────────────────────────────────────
+  Widget _buildPomodoroTab(BuildContext context, bool isDark, Color card) {
+    final pomodoroState = ref.watch(pomodoroProvider);
+    final allSessions = pomodoroState.allSessions;
+    final filteredSessions = _filterPomodoroSessions(allSessions);
+    final pomodoroSummary = _computePomodoroSummary(filteredSessions);
+    final weeklyPomodoros = _computeWeeklyPomodoros(allSessions);
+
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        _buildFilterTabs(context),
+        const SizedBox(height: 12),
+        _buildSubFilter(context, card),
+        const SizedBox(height: 24),
+        _buildPomodoroSummaryRow(context, card, pomodoroSummary),
+        const SizedBox(height: 24),
+        _buildPomodoroWeeklyChart(context, card, weeklyPomodoros),
+        const SizedBox(height: 24),
+        _buildPomodoroSessionsList(context, card, filteredSessions),
+        const SizedBox(height: 40),
+      ],
+    );
+  }
+
+  List<PomodoroSession> _filterPomodoroSessions(
+      List<PomodoroSession> sessions) {
+    final now = DateTime.now();
+    switch (_filterType) {
+      case 0: // This week
+        final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+        final start =
+            DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+        final end = start.add(const Duration(days: 6, hours: 23, minutes: 59));
+        return sessions.where((s) {
+          return !s.startTime.isBefore(start) && !s.startTime.isAfter(end);
+        }).toList();
+
+      case 1: // Month
+        return sessions
+            .where((s) =>
+                s.startTime.year == _selectedYear &&
+                s.startTime.month == _selectedMonth)
+            .toList();
+
+      case 2: // Year
+        return sessions
+            .where((s) => s.startTime.year == _selectedYear)
+            .toList();
+
+      case 3: // Range
+        if (_startDate == null || _endDate == null) return sessions;
+        final s =
+            DateTime(_startDate!.year, _startDate!.month, _startDate!.day);
+        final e = DateTime(
+            _endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59);
+        return sessions.where((session) {
+          return !session.startTime.isBefore(s) &&
+              !session.startTime.isAfter(e);
+        }).toList();
+
+      default:
+        return sessions;
+    }
+  }
+
+  Map<String, dynamic> _computePomodoroSummary(List<PomodoroSession> sessions) {
+    final completedWork = sessions
+        .where((s) => s.type == PomodoroSessionType.work && s.completed)
+        .length;
+    final completedBreaks = sessions
+        .where((s) =>
+            (s.type == PomodoroSessionType.shortBreak ||
+                s.type == PomodoroSessionType.longBreak) &&
+            s.completed)
+        .length;
+    final totalMinutes = sessions
+        .where((s) => s.completed)
+        .fold(0, (sum, s) => sum + s.durationMinutes);
+
+    return {
+      'work': completedWork,
+      'breaks': completedBreaks,
+      'minutes': totalMinutes,
+    };
+  }
+
+  List<Map<String, dynamic>> _computeWeeklyPomodoros(
+      List<PomodoroSession> sessions) {
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final now = DateTime.now();
+    final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+
+    return List.generate(7, (i) {
+      final day = startOfWeek.add(Duration(days: i));
+      final daySessions = sessions.where((s) {
+        final sessionDay =
+            DateTime(s.startTime.year, s.startTime.month, s.startTime.day);
+        final targetDay = DateTime(day.year, day.month, day.day);
+        return sessionDay == targetDay;
+      }).toList();
+
+      final completed = daySessions
+          .where((s) => s.type == PomodoroSessionType.work && s.completed)
+          .length;
+
+      return {
+        'day': dayNames[i],
+        'count': completed,
+      };
+    });
+  }
+
+  Widget _buildPomodoroSummaryRow(
+      BuildContext context, Color card, Map<String, dynamic> summary) {
+    final items = [
+      {
+        'value': '${summary['work']}',
+        'label': 'Work Sessions',
+        'color': const Color(0xFFFF6B6B),
+        'icon': Icons.work_outline,
+      },
+      {
+        'value': '${summary['breaks']}',
+        'label': 'Breaks',
+        'color': const Color(0xFF4ECDC4),
+        'icon': Icons.coffee_outlined,
+      },
+      {
+        'value': '${summary['minutes']}',
+        'label': 'Minutes',
+        'color': const Color(0xFF7B6EF6),
+        'icon': Icons.access_time,
+      },
+    ];
+
+    return Row(
+      children: items.asMap().entries.map((e) {
+        final item = e.value;
+        return Expanded(
+          child: Container(
+            margin: EdgeInsets.only(right: e.key < 2 ? 10 : 0),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: card,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: (item['color'] as Color).withValues(alpha: 0.1),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(children: [
+              Icon(item['icon'] as IconData,
+                  color: item['color'] as Color, size: 24),
+              const SizedBox(height: 8),
+              Text(item['value'] as String,
+                  style: GoogleFonts.nunito(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: item['color'] as Color)),
+              Text(item['label'] as String,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(fontSize: 11),
+                  textAlign: TextAlign.center),
+            ]),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildPomodoroWeeklyChart(
+      BuildContext context, Color card, List<Map<String, dynamic>> data) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final textSecCt = Theme.of(context).textTheme.bodyMedium?.color;
+    final maxCount = data.fold<int>(0, (max, d) {
+      final count = d['count'] as int;
+      return count > max ? count : max;
+    });
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration:
+          BoxDecoration(color: card, borderRadius: BorderRadius.circular(20)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.bar_chart_rounded, size: 18, color: primary),
+          const SizedBox(width: 8),
+          Text('Weekly Sessions — $_periodLabel',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+        ]),
+        const SizedBox(height: 16),
+        ...data.map((stat) {
+          final count = stat['count'] as int;
+          final progress = maxCount > 0 ? count / maxCount : 0.0;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(children: [
+              SizedBox(
+                  width: 30,
+                  child: Text(stat['day'] as String,
+                      style: TextStyle(
+                          color: textSecCt,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13))),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 14,
+                    backgroundColor:
+                        const Color(0xFFFF6B6B).withValues(alpha: 0.12),
+                    color: count == 0
+                        ? const Color(0xFFFF6B6B).withValues(alpha: 0.15)
+                        : const Color(0xFFFF6B6B),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 30,
+                child: Text('$count',
+                    style: TextStyle(
+                        color: textSecCt,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12),
+                    textAlign: TextAlign.right),
+              ),
+            ]),
+          );
+        }),
+      ]),
+    );
+  }
+
+  Widget _buildPomodoroSessionsList(
+      BuildContext context, Color card, List<PomodoroSession> sessions) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final textSec = Theme.of(context).textTheme.bodyMedium?.color;
+
+    // Sort sessions by start time (newest first)
+    final sortedSessions = List<PomodoroSession>.from(sessions)
+      ..sort((a, b) => b.startTime.compareTo(a.startTime));
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration:
+          BoxDecoration(color: card, borderRadius: BorderRadius.circular(20)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.history_rounded, size: 18, color: primary),
+          const SizedBox(width: 8),
+          Text('Session History',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+          const Spacer(),
+          if (sessions.isNotEmpty)
+            TextButton.icon(
+              onPressed: () => _showClearAllHistoryDialog(context),
+              icon: Icon(Icons.delete_sweep_rounded, size: 18, color: primary),
+              label: Text('Clear All',
+                  style: TextStyle(color: primary, fontSize: 12)),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              ),
+            ),
+        ]),
+        const SizedBox(height: 16),
+        if (sortedSessions.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Text('No sessions in this period',
+                  style: TextStyle(color: textSec, fontSize: 13)),
+            ),
+          )
+        else
+          ...sortedSessions.take(20).map((session) {
+            final typeColor = session.type == PomodoroSessionType.work
+                ? const Color(0xFFFF6B6B)
+                : (session.type == PomodoroSessionType.shortBreak
+                    ? const Color(0xFF4ECDC4)
+                    : const Color(0xFF95E1D3));
+
+            final typeIcon = session.type == PomodoroSessionType.work
+                ? Icons.work_outline
+                : (session.type == PomodoroSessionType.shortBreak
+                    ? Icons.coffee_outlined
+                    : Icons.bed_outlined);
+
+            final formattedTime = _formatSessionTime(session.startTime);
+            final statusIcon = session.completed
+                ? Icons.check_circle_rounded
+                : Icons.cancel_rounded;
+            final statusColor =
+                session.completed ? statusCompleted : statusOverdue;
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: typeColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(typeIcon, color: typeColor, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(session.typeLabel,
+                          style: TextStyle(
+                              color:
+                                  Theme.of(context).textTheme.bodyLarge?.color,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14)),
+                      Text('$formattedTime • ${session.durationMinutes} min',
+                          style: TextStyle(color: textSec, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                Icon(statusIcon, color: statusColor, size: 20),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: Icon(Icons.delete_outline_rounded, size: 20),
+                  color: textSec,
+                  onPressed: () => _showDeleteSessionDialog(context, session),
+                  tooltip: 'Delete session',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ]),
+            );
+          }),
+      ]),
+    );
+  }
+
+  String _formatSessionTime(DateTime dateTime) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    return '${months[dateTime.month - 1]} ${dateTime.day}, $hour:$minute';
+  }
+
+  void _showDeleteSessionDialog(BuildContext context, PomodoroSession session) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete Session',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+        content: Text(
+          'Are you sure you want to delete this ${session.typeLabel.toLowerCase()} session?',
+          style: GoogleFonts.poppins(),
+        ),
+        backgroundColor: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Cancel',
+                style: GoogleFonts.poppins(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              ref.read(pomodoroProvider.notifier).deleteSession(session);
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Session deleted',
+                      style: GoogleFonts.poppins()),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade400,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Delete', style: GoogleFonts.poppins()),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showClearAllHistoryDialog(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Clear All History',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+        content: Text(
+          'Are you sure you want to delete all pomodoro session history? This action cannot be undone.',
+          style: GoogleFonts.poppins(),
+        ),
+        backgroundColor: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Cancel',
+                style: GoogleFonts.poppins(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              ref.read(pomodoroProvider.notifier).clearAllSessions();
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('All sessions cleared',
+                      style: GoogleFonts.poppins()),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade400,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Clear All', style: GoogleFonts.poppins()),
+          ),
+        ],
+      ),
     );
   }
 }

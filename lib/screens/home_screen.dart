@@ -11,6 +11,7 @@ import '../models/task_model.dart';
 import 'task_detail_screen.dart';
 import 'alarm_screen.dart';
 import 'signup_screen.dart';
+import 'pomodoro_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -69,6 +70,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       children: [
                         // Clock
                         _buildClockCard(context, isDark),
+                        const SizedBox(height: 16),
+                        // Pomodoro Timer Button
+                        _buildPomodoroButton(context, isDark),
                         // Summary Grid
                         _buildSummaryGrid(context, summary, ref),
                         // Alarm Banner — hanya muncul jika ada task dengan alarmMusic
@@ -512,6 +516,86 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         const SizedBox(height: 24),
       ],
+    );
+  }
+
+  Widget _buildPomodoroButton(BuildContext context, bool isDark) {
+    final pomodoroState = ref.watch(pomodoroProvider);
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const PomodoroScreen()),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFFF6B6B),
+              Color(0xFFFF8E53),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFF6B6B).withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(
+                Icons.timer_outlined,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Pomodoro Timer',
+                    style: GoogleFonts.inter(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    pomodoroState.isActive
+                        ? '${pomodoroState.stateLabel} - ${pomodoroState.formattedTime}'
+                        : 'Stay focused with work sessions',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: Colors.white.withOpacity(0.9),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: Colors.white.withOpacity(0.8),
+              size: 18,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

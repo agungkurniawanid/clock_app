@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/task_model.dart';
 import '../models/birthday_model.dart';
+import '../models/pomodoro_model.dart';
 
 /// Persists tasks and app settings to SharedPreferences.
 class StorageService {
@@ -24,6 +25,8 @@ class StorageService {
   static const _defaultNotifVolumeKey = 'default_notif_volume';
   static const _birthdaysKey = 'birthdays_v1';
   static const _birthdayBadgeDismissedKey = 'birthday_badge_dismissed';
+  static const _pomodoroSettingsKey = 'pomodoro_settings';
+  static const _pomodoroSessionsKey = 'pomodoro_sessions';
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
   static Future<void> saveTasks(List<TaskModel> tasks) async {
@@ -236,6 +239,45 @@ class StorageService {
   static Future<bool> loadBirthdayBadgeDismissed() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_birthdayBadgeDismissedKey) ?? false;
+  }
+
+  // ── Pomodoro Timer ─────────────────────────────────────────────────────────
+  static Future<void> savePomodoroSettings(PomodoroSettings settings) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_pomodoroSettingsKey, jsonEncode(settings.toJson()));
+  }
+
+  static Future<PomodoroSettings> loadPomodoroSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final str = prefs.getString(_pomodoroSettingsKey);
+    if (str == null) return const PomodoroSettings();
+    try {
+      return PomodoroSettings.fromJson(
+          jsonDecode(str) as Map<String, dynamic>);
+    } catch (_) {
+      return const PomodoroSettings();
+    }
+  }
+
+  static Future<void> savePomodoroSessions(
+      List<PomodoroSession> sessions) async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = sessions.map((s) => jsonEncode(s.toJson())).toList();
+    await prefs.setStringList(_pomodoroSessionsKey, list);
+  }
+
+  static Future<List<PomodoroSession>> loadPomodoroSessions() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_pomodoroSessionsKey);
+    if (list == null) return [];
+    try {
+      return list
+          .map((s) =>
+              PomodoroSession.fromJson(jsonDecode(s) as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   static Future<void> clearAll() async {

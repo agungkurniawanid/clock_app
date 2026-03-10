@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/dummy_data.dart';
@@ -5,9 +6,11 @@ import '../data/global_events.dart';
 import '../models/task_model.dart';
 import '../models/music_model.dart';
 import '../models/birthday_model.dart';
+import '../models/pomodoro_model.dart';
 import '../services/holiday_service.dart';
 import '../services/notification_service.dart';
 import '../services/storage_service.dart';
+import '../services/audio_service.dart';
 
 // ─── Theme Provider ───────────────────────────────────────────────────────────
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.light);
@@ -222,6 +225,9 @@ class TaskNotifier extends StateNotifier<List<TaskModel>> {
     await NotificationService.scheduleTaskAlarm(task);
     await NotificationService.scheduleReminders(task);
     await NotificationService.scheduleDueReminders(task);
+    // Schedule subtask reminders
+    await NotificationService.scheduleSubTaskReminders(task);
+    // Note: Checklist items don't support reminders
   }
 
   // ── Reschedule all after boot / reopen ─────────────────────────────────────
@@ -733,3 +739,272 @@ class HolidayNotifier extends AsyncNotifier<HolidayState> {
 
 final holidayProvider = AsyncNotifierProvider<HolidayNotifier, HolidayState>(
     () => HolidayNotifier());
+
+// ─── Pomodoro Timer Provider ──────────────────────────────────────────────────
+
+class PomodoroNotifier extends StateNotifier<PomodoroTimerState> {
+  PomodoroNotifier() : super(const PomodoroTimerState()) {
+    _loadSettings();
+    _loadTodaySessions();
+  }
+
+  Timer? _timer;
+
+  Future<void> _loadSettings() async {
+    final saved = await StorageService.loadPomodoroSettings();
+    state = state.copyWith(settings: saved);
+  }
+
+  Future<void> _saveSettings() async {
+    await StorageService.savePomodoroSettings(state.settings);
+  }
+
+  Future<void> _loadTodaySessions() async {
+    final sessions = await StorageService.loadPomodoroSessions();
+    final today = DateTime.now();
+    final todaySessions = sessions.where((s) {
+      final sessionDate = DateTime(
+          s.startTime.year, s.startTime.month, s.startTime.day);
+      final todayDate = DateTime(today.year, today.month, today.day);
+      return sessionDate == todayDate;
+    }).toList();
+    state = state.copyWith(
+      allSessions: sessions,
+      todaySessions: todaySessions,
+      completedWorkSessions: todaySessions
+          .where((s) => s.type == PomodoroSessionType.work && s.completed)
+          .length,
+    );
+  }
+
+  Future<void> _saveSessions() async {
+    await StorageService.savePomodoroSessions(state.allSessions);
+  }
+
+  void startWork() {
+    _timer?.cancel();
+    AudioService.instance.stop(); // Stop alarm sound if playing
+    state = state.copyWith(
+      state: PomodoroState.working,
+      remainingSeconds: state.settings.workDuration * 60,
+      sessionStartTime: DateTime.now(),
+      clearPausedAt: true,
+    );
+    _startTimer();
+  }
+
+  void startShortBreak() {
+    _timer?.cancel();
+    AudioService.instance.stop(); // Stop alarm sound if playing
+    state = state.copyWith(
+      state: PomodoroState.shortBreak,
+      remainingSeconds: state.settings.shortBreakDuration * 60,
+      sessionStartTime: DateTime.now(),
+      clearPausedAt: true,
+    );
+    _startTimer();
+  }
+
+  void startLongBreak() {
+    _timer?.cancel();
+    AudioService.instance.stop(); // Stop alarm sound if playing
+    state = state.copyWith(
+      state: PomodoroState.longBreak,
+      remainingSeconds: state.settings.longBreakDuration * 60,
+      sessionStartTime: DateTime.now(),
+      clearPausedAt: true,
+    );
+    _startTimer();
+  }
+
+  void pause() {
+    _timer?.cancel();
+    state = state.copyWith(
+      state: PomodoroState.paused,
+      pausedAt: DateTime.now(),
+    );
+  }
+
+  void resume() {
+    if (state.state == PomodoroState.paused) {
+      final previousState =
+          state.isBreak ? state.state : PomodoroState.working;
+      state = state.copyWith(
+        state: previousState,
+        clearPausedAt: true,
+      );
+      _startTimer();
+    }
+  }
+
+  void reset() {
+    _timer?.cancel();
+    AudioService.instance.stop(); // Stop alarm sound if playing
+    state = state.copyWith(
+      state: PomodoroState.idle,
+      remainingSeconds: 0,
+      clearSessionStartTime: true,
+      clearPausedAt: true,
+    );
+  }
+
+  void skip() {
+    _timer?.cancel();
+    AudioService.instance.stop(); // Stop alarm sound if playing
+    _completeCurrentSession(completed: false);
+    _autoStartNext();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (state.remainingSeconds > 0) {
+        state = state.copyWith(remainingSeconds: state.remainingSeconds - 1);
+      } else {
+        _onTimerComplete();
+      }
+    });
+  }
+
+  void _onTimerComplete() {
+    _timer?.cancel();
+    _completeCurrentSession(completed: true);
+
+    // Play alarm sound
+    AudioService.instance.playAsset(
+      state.settings.alarmSound,
+      volume: state.settings.alarmVolume / 100.0,
+    );
+
+    // Show notification
+    NotificationService.showPomodoroNotification(
+      title: state.isBreak ? 'Break Complete!' : 'Focus Session Complete!',
+      body: state.isBreak
+          ? 'Time to get back to work 💪'
+          : 'Great job! Take a break 🎉',
+    );
+
+    _autoStartNext();
+  }
+
+  void _completeCurrentSession({required bool completed}) {
+    if (state.sessionStartTime == null) return;
+
+    final sessionType = state.state == PomodoroState.working
+        ? PomodoroSessionType.work
+        : (state.state == PomodoroState.shortBreak
+            ? PomodoroSessionType.shortBreak
+            : PomodoroSessionType.longBreak);
+
+    final duration = state.state == PomodoroState.working
+        ? state.settings.workDuration
+        : (state.state == PomodoroState.shortBreak
+            ? state.settings.shortBreakDuration
+            : state.settings.longBreakDuration);
+
+    final session = PomodoroSession(
+      startTime: state.sessionStartTime!,
+      endTime: DateTime.now(),
+      type: sessionType,
+      durationMinutes: duration,
+      completed: completed,
+    );
+
+    final updatedTodaySessions = [...state.todaySessions, session];
+    final updatedAllSessions = [...state.allSessions, session];
+    state = state.copyWith(
+      todaySessions: updatedTodaySessions,
+      allSessions: updatedAllSessions,
+      completedWorkSessions: sessionType == PomodoroSessionType.work && completed
+          ? state.completedWorkSessions + 1
+          : state.completedWorkSessions,
+    );
+
+    _saveSessions();
+  }
+
+  void _autoStartNext() {
+    if (state.state == PomodoroState.working) {
+      // After work session
+      if (state.completedWorkSessions % state.settings.sessionsBeforeLongBreak == 0) {
+        // Long break
+        if (state.settings.autoStartBreaks) {
+          startLongBreak();
+        } else {
+          state = state.copyWith(
+            state: PomodoroState.idle,
+            remainingSeconds: state.settings.longBreakDuration * 60,
+            clearSessionStartTime: true,
+          );
+        }
+      } else {
+        // Short break
+        if (state.settings.autoStartBreaks) {
+          startShortBreak();
+        } else {
+          state = state.copyWith(
+            state: PomodoroState.idle,
+            remainingSeconds: state.settings.shortBreakDuration * 60,
+            clearSessionStartTime: true,
+          );
+        }
+      }
+    } else {
+      // After break
+      if (state.settings.autoStartPomodoros) {
+        startWork();
+      } else {
+        state = state.copyWith(
+          state: PomodoroState.idle,
+          remainingSeconds: state.settings.workDuration * 60,
+          clearSessionStartTime: true,
+        );
+      }
+    }
+  }
+
+  void updateSettings(PomodoroSettings settings) {
+    state = state.copyWith(settings: settings);
+    _saveSettings();
+  }
+
+  Future<void> deleteSession(PomodoroSession session) async {
+    final updatedAllSessions = state.allSessions.where((s) => s != session).toList();
+
+    // Update today's sessions as well
+    final today = DateTime.now();
+    final todaySessions = updatedAllSessions.where((s) {
+      final sessionDate = DateTime(s.startTime.year, s.startTime.month, s.startTime.day);
+      final todayDate = DateTime(today.year, today.month, today.day);
+      return sessionDate == todayDate;
+    }).toList();
+
+    state = state.copyWith(
+      allSessions: updatedAllSessions,
+      todaySessions: todaySessions,
+      completedWorkSessions: todaySessions
+          .where((s) => s.type == PomodoroSessionType.work && s.completed)
+          .length,
+    );
+    await _saveSessions();
+  }
+
+  Future<void> clearAllSessions() async {
+    state = state.copyWith(
+      allSessions: [],
+      todaySessions: [],
+      completedWorkSessions: 0,
+    );
+    await _saveSessions();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+}
+
+final pomodoroProvider =
+    StateNotifierProvider<PomodoroNotifier, PomodoroTimerState>(
+        (ref) => PomodoroNotifier());

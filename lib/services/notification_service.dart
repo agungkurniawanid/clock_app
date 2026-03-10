@@ -106,6 +106,20 @@ class NotificationService {
         enableVibration: true,
       ),
     );
+
+    // Pomodoro channel – high importance, notification sound
+    await ap?.deleteNotificationChannel('pomodoro_channel');
+    await ap?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        'pomodoro_channel',
+        'Pomodoro Timer',
+        description: 'Pomodoro timer notifications',
+        importance: Importance.high,
+        playSound: true,
+        sound: RawResourceAndroidNotificationSound('alarm_clock'),
+        enableVibration: true,
+      ),
+    );
   }
 
   // ── Permission request ────────────────────────────────────────────────────
@@ -353,6 +367,84 @@ class NotificationService {
     await scheduleTaskAlarm(snoozeTask);
   }
 
+  // ── Subtask & Checklist Item Reminders ─────────────────────────────────────
+  // Schedule notification reminders for subtasks with due dates
+  static Future<void> scheduleSubTaskReminders(TaskModel task) async {
+    await _scheduleSubTaskRemindersRecursive(task.id, task.subTasks);
+  }
+
+  static Future<void> _scheduleSubTaskRemindersRecursive(
+      String taskId, List<SubTask> subtasks) async {
+    for (final st in subtasks) {
+      // Schedule reminder for this subtask if configured
+      if (st.dueReminderEnabled && st.dueDate != null) {
+        await _scheduleSubTaskNotification(taskId, st);
+      }
+      // Note: Checklist items within subtasks don't have their own reminders
+      // They are simple items with just id, title, and isChecked status
+    }
+  }
+
+  // Removed scheduleChecklistItemReminders method as ChecklistItem
+  // only has id, title, and isChecked - no reminder functionality
+
+  static Future<void> _scheduleSubTaskNotification(
+      String taskId, SubTask subtask) async {
+    if (subtask.dueDate == null) return;
+
+    final dueTime = subtask.dueTime;
+    final dueDt = DateTime(
+      subtask.dueDate!.year,
+      subtask.dueDate!.month,
+      subtask.dueDate!.day,
+      dueTime?.hour ?? 23,
+      dueTime?.minute ?? 59,
+    );
+
+    // Schedule reminder 1 hour before due date (default for subtasks)
+    final remindTime = dueDt.subtract(const Duration(hours: 1));
+    if (remindTime.isBefore(DateTime.now())) return;
+
+    final remindTz = tz.TZDateTime.from(remindTime, tz.local);
+
+    // Skip if DND is enabled and time falls within quiet hours
+    if (dndEnabled && _isDndTime(remindTz)) return;
+
+    const androidDetails = AndroidNotificationDetails(
+      'reminder_channel',
+      'Task Reminders',
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound(
+          'mixkit_happy_bells_notification_937'),
+      enableVibration: true,
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    await _plugin.zonedSchedule(
+      _subtaskReminderId(taskId, subtask.id),
+      '📋  Subtask Due Soon: ${subtask.title}',
+      subtask.dueTime != null
+          ? 'Due at ${_formatTime(subtask.dueTime!)}'
+          : 'Due today',
+      remindTz,
+      const NotificationDetails(android: androidDetails, iOS: iosDetails),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: taskId,
+    );
+  }
+
+  // Note: ChecklistItem no longer supports reminders
+  // Removed _scheduleChecklistItemNotification method
+
   // ── Cancel ────────────────────────────────────────────────────────────────
 
   /// Cancels only the alarm notification (not reminders).
@@ -371,7 +463,19 @@ class NotificationService {
     for (int i = 0; i < 6; i++) {
       await _plugin.cancel(_dueReminderId(taskId, i));
     }
+    // Cancel subtask reminders
+    await cancelSubTaskReminders(taskId);
+    // Note: Checklist items don't have reminders
   }
+
+  static Future<void> cancelSubTaskReminders(String taskId) async {
+    // Cancel up to 50 subtask reminders (supports up to 50 subtasks per task)
+    for (int i = 0; i < 50; i++) {
+      await _plugin.cancel(_subtaskReminderId(taskId, i.toString()));
+    }
+  }
+
+  // Removed cancelChecklistItemReminders as ChecklistItem doesn't support reminders
 
   static Future<void> cancelAll() async {
     await _plugin.cancelAll();
@@ -478,6 +582,36 @@ class NotificationService {
     }
   }
 
+  // ── Pomodoro Timer Notifications ──────────────────────────────────────────
+  static Future<void> showPomodoroNotification({
+    required String title,
+    required String body,
+  }) async {
+    const androidDetails = AndroidNotificationDetails(
+      'pomodoro_channel',
+      'Pomodoro Timer',
+      channelDescription: 'Pomodoro timer notifications',
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound('alarm_clock'),
+      enableVibration: true,
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    await _plugin.show(
+      99999, // Constant ID for Pomodoro notifications
+      title,
+      body,
+      const NotificationDetails(android: androidDetails, iOS: iosDetails),
+    );
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
   static int _alarmId(String id) => id.hashCode.abs() % 2147483647;
   static int _reminderId(String id, int i) =>
@@ -490,6 +624,12 @@ class NotificationService {
   static int _birthdayBaseId(String id) => id.hashCode.abs() % 2147483647;
   static int _birthdayReminderId(String id, int i) =>
       (_birthdayBaseId(id) + 500 + i) % 2147483647;
+
+  // Subtask notification IDs use offset 1000+ to avoid collision
+  static int _subtaskReminderId(String taskId, String subtaskId) =>
+      ('${taskId}_subtask_$subtaskId'.hashCode.abs() + 1000) % 2147483647;
+
+  // Removed _checklistItemReminderId as ChecklistItem doesn't support reminders
 
   /// Returns the next calendar date (at midnight) on which [month]/[day]
   /// occurs.  If today is already that date, returns today so the on-day
@@ -544,5 +684,12 @@ class NotificationService {
     if (label.contains('15 Min')) return 15;
     if (label.contains('5 Min')) return 5;
     return null;
+  }
+
+  /// Formats a TimeOfDay to HH:MM string
+  static String _formatTime(TimeOfDay time) {
+    final h = time.hour.toString().padLeft(2, '0');
+    final m = time.minute.toString().padLeft(2, '0');
+    return '$h:$m';
   }
 }
