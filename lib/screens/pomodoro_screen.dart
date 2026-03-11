@@ -143,8 +143,11 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen>
     return AnimatedBuilder(
       animation: _pulseController,
       builder: (context, child) {
-        final isActive = state.isActive && state.state != PomodoroState.paused;
-        final pulseValue = isActive ? _pulseController.value * 0.05 : 0.0;
+        // Pulse saat timer aktif (bukan pause) ATAU saat alarm berbunyi
+        final shouldPulse =
+            (state.isActive && state.state != PomodoroState.paused) ||
+                state.isAlarmRinging;
+        final pulseValue = shouldPulse ? _pulseController.value * 0.05 : 0.0;
 
         return Container(
           width: 300 + (pulseValue * 20),
@@ -202,6 +205,11 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen>
 
   Widget _buildControls(
       BuildContext context, bool isDark, PomodoroTimerState state) {
+    // Prioritas: alarm berbunyi → tampilkan tombol stop alarm + tombol sesi berikutnya
+    if (state.isAlarmRinging) {
+      return _buildAlarmRingingControls(context, isDark, state);
+    }
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -230,7 +238,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen>
               isDark,
               icon: Icons.stop,
               label: 'Stop',
-              color: const Color(0xFF9E9E9E), // Abu-abu - untuk stop/berhenti
+              color: const Color(0xFFE53935), // Merah - untuk stop/berhenti
               onTap: () => _showStopConfirmation(context),
             ),
             const SizedBox(width: 12),
@@ -274,6 +282,101 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen>
           ],
         ],
       ),
+    );
+  }
+
+  /// Tampilan kontrol saat alarm berbunyi setelah sesi selesai.
+  /// Menampilkan tombol Stop Alarm yang besar dan tombol-tombol sesi berikutnya.
+  Widget _buildAlarmRingingControls(
+      BuildContext context, bool isDark, PomodoroTimerState state) {
+    return Column(
+      children: [
+        // Tombol Stop Alarm yang besar dan mencolok
+        AnimatedBuilder(
+          animation: _pulseController,
+          builder: (context, child) {
+            final scale = 1.0 + _pulseController.value * 0.03;
+            return Transform.scale(
+              scale: scale,
+              child: GestureDetector(
+                onTap: () => ref.read(pomodoroProvider.notifier).stopAlarm(),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF4444), Color(0xFFFF6B6B)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF4444)
+                            .withOpacity(0.4 + _pulseController.value * 0.2),
+                        blurRadius: 20,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.alarm_off,
+                          color: Colors.white, size: 28),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Stop Alarm',
+                        style: GoogleFonts.inter(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        // Tombol mulai sesi berikutnya
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildControlButton(
+                context,
+                isDark,
+                icon: Icons.play_arrow,
+                label: 'Start Work',
+                color: const Color(0xFF4CAF50),
+                onTap: () => ref.read(pomodoroProvider.notifier).startWork(),
+              ),
+              const SizedBox(width: 12),
+              _buildControlButton(
+                context,
+                isDark,
+                icon: Icons.coffee,
+                label: 'Short Break',
+                color: const Color(0xFF4ECDC4),
+                onTap: () =>
+                    ref.read(pomodoroProvider.notifier).startShortBreak(),
+              ),
+              const SizedBox(width: 12),
+              _buildControlButton(
+                context,
+                isDark,
+                icon: Icons.bed,
+                label: 'Long Break',
+                color: const Color(0xFFFFB74D),
+                onTap: () =>
+                    ref.read(pomodoroProvider.notifier).startLongBreak(),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

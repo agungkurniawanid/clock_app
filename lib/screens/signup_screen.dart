@@ -1,25 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/app_providers.dart';
-import '../services/storage_service.dart';
 import '../theme/app_colors.dart';
 import 'login_screen.dart';
 
-class SignUpScreen extends ConsumerStatefulWidget {
+class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
 
   @override
-  ConsumerState<SignUpScreen> createState() => _SignUpScreenState();
+  State<SignUpScreen> createState() => _SignUpScreenState();
 }
 
-class _SignUpScreenState extends ConsumerState<SignUpScreen> {
+class _SignUpScreenState extends State<SignUpScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   bool _obscurePassword = true;
-  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -56,7 +52,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _proceedSignUp();
+              Navigator.pop(context);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: primary,
@@ -71,42 +67,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         ],
       ),
     );
-  }
-
-  void _proceedSignUp() {
-    setState(() => _isLoading = true);
-
-    // Simulate sign up + auto login — UI only, no real logic
-    Future.delayed(const Duration(milliseconds: 900), () async {
-      if (!mounted) return;
-
-      final name = _nameCtrl.text.trim();
-      final email = _emailCtrl.text.trim();
-
-      // Sync banner should appear only if there are local tasks to migrate
-      final tasks = ref.read(taskListProvider);
-      final hasUnsynced = tasks.isNotEmpty;
-
-      // Persist auth session
-      await StorageService.saveAuthState(
-        isLoggedIn: true,
-        userName: name,
-        userEmail: email,
-      );
-      await StorageService.saveHasUnsynced(hasUnsynced);
-
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-
-      // Set logged-in state
-      ref.read(isLoggedInProvider.notifier).state = true;
-      ref.read(currentUserNameProvider.notifier).state = name;
-      ref.read(currentUserEmailProvider.notifier).state = email;
-      ref.read(hasUnsyncedLocalTasksProvider.notifier).state = hasUnsynced;
-
-      // Close auth screens and go back to Dashboard
-      Navigator.pop(context);
-    });
   }
 
   @override
@@ -289,27 +249,18 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 SizedBox(
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _signUp,
+                    onPressed: _signUp,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primary,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16)),
                     ),
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text(
-                            'Daftar & Masuk',
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w700),
-                          ),
+                    child: const Text(
+                      'Daftar & Masuk',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),

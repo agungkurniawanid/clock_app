@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/task_model.dart';
 import '../models/birthday_model.dart';
 import '../models/pomodoro_model.dart';
+import '../models/notification_item.dart';
 
 /// Persists tasks and app settings to SharedPreferences.
 class StorageService {
@@ -27,6 +28,8 @@ class StorageService {
   static const _birthdayBadgeDismissedKey = 'birthday_badge_dismissed';
   static const _pomodoroSettingsKey = 'pomodoro_settings';
   static const _pomodoroSessionsKey = 'pomodoro_sessions';
+  static const _notificationsKey = 'in_app_notifications_v1';
+  static const _fontScaleIndexKey = 'font_scale_index';
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
   static Future<void> saveTasks(List<TaskModel> tasks) async {
@@ -119,6 +122,18 @@ class StorageService {
   static Future<int> loadAccentIndex() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt(_accentColorKey) ?? 0;
+  }
+
+  static Future<void> saveFontScaleIndex(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_fontScaleIndexKey, index);
+  }
+
+  /// Returns persisted font scale index. Default 1 = Normal (1.0×).
+  /// 0 = Small (0.85×), 1 = Normal (1.0×), 2 = Large (1.15×), 3 = XLarge (1.3×)
+  static Future<int> loadFontScaleIndex() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_fontScaleIndexKey) ?? 0;
   }
 
   static Future<void> saveDefaultReminder(String reminder) async {
@@ -252,8 +267,7 @@ class StorageService {
     final str = prefs.getString(_pomodoroSettingsKey);
     if (str == null) return const PomodoroSettings();
     try {
-      return PomodoroSettings.fromJson(
-          jsonDecode(str) as Map<String, dynamic>);
+      return PomodoroSettings.fromJson(jsonDecode(str) as Map<String, dynamic>);
     } catch (_) {
       return const PomodoroSettings();
     }
@@ -274,6 +288,27 @@ class StorageService {
       return list
           .map((s) =>
               PomodoroSession.fromJson(jsonDecode(s) as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ── In-App Notifications ───────────────────────────────────────────────────
+  static Future<void> saveNotifications(List<NotificationItem> items) async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = items.map((n) => jsonEncode(n.toJson())).toList();
+    await prefs.setStringList(_notificationsKey, list);
+  }
+
+  static Future<List<NotificationItem>> loadNotifications() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_notificationsKey);
+    if (list == null) return [];
+    try {
+      return list
+          .map((s) =>
+              NotificationItem.fromJson(jsonDecode(s) as Map<String, dynamic>))
           .toList();
     } catch (_) {
       return [];

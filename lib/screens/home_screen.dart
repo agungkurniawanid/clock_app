@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_providers.dart';
+import '../services/storage_service.dart';
 import '../widgets/clock_widget.dart';
 import '../widgets/section_header.dart';
 import '../widgets/task_card.dart';
@@ -12,6 +13,7 @@ import 'task_detail_screen.dart';
 import 'alarm_screen.dart';
 import 'signup_screen.dart';
 import 'pomodoro_screen.dart';
+import 'notification_list_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -26,9 +28,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Refresh setiap menit agar countdown tetap akurat
+    // Sync triggered tasks once on screen load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final tasks = ref.read(taskListProvider);
+      ref.read(notificationListProvider.notifier).syncTriggeredTasks(tasks);
+    });
+    // Refresh every minute: update countdown AND sync new triggered tasks
     _countdownTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+        final tasks = ref.read(taskListProvider);
+        ref.read(notificationListProvider.notifier).syncTriggeredTasks(tasks);
+      }
     });
   }
 
@@ -218,39 +229,54 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           Row(
             children: [
-              IconButton(
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (_) => AlertDialog(
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20)),
-                      title: Row(
-                        children: [
-                          Icon(Icons.notifications_none_rounded,
-                              color: Theme.of(context).colorScheme.primary),
-                          const SizedBox(width: 10),
-                          const Text('Notifikasi'),
-                        ],
-                      ),
-                      content: const Text(
-                        'Fitur notifikasi masih dalam tahap pengembangan. '
-                        'Nantikan pembaruan berikutnya!',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Oke, Mengerti'),
-                        ),
-                      ],
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const NotificationListScreen()),
                     ),
-                  );
-                },
-                icon: Icon(
-                  Icons.notifications_none_rounded,
-                  color: Theme.of(context).textTheme.bodyLarge?.color,
-                  size: 26,
-                ),
+                    icon: Builder(builder: (context) {
+                      final unread = ref.watch(unreadNotificationCountProvider);
+                      return Icon(
+                        unread > 0
+                            ? Icons.notifications_rounded
+                            : Icons.notifications_none_rounded,
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
+                        size: 26,
+                      );
+                    }),
+                  ),
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Builder(builder: (context) {
+                      final unread = ref.watch(unreadNotificationCountProvider);
+                      if (unread == 0) return const SizedBox.shrink();
+                      return Container(
+                        width: 18,
+                        height: 18,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE53935),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            unread > 9 ? '9+' : '$unread',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ],
               ),
               GestureDetector(
                 onTap: () => Navigator.push(

@@ -140,6 +140,10 @@ class PomodoroTimerState {
   final int completedWorkSessions; // for today
   final DateTime? sessionStartTime;
   final DateTime? pausedAt;
+  final DateTime?
+      targetEndTime; // waktu selesai yang diharapkan (untuk akurasi background)
+  final PomodoroState? stateBeforePause; // untuk restore state saat resume
+  final bool isAlarmRinging; // alarm sedang berbunyi setelah sesi selesai
   final List<PomodoroSession> todaySessions;
   final List<PomodoroSession> allSessions; // all historical sessions
   final PomodoroSettings settings;
@@ -150,6 +154,9 @@ class PomodoroTimerState {
     this.completedWorkSessions = 0,
     this.sessionStartTime,
     this.pausedAt,
+    this.targetEndTime,
+    this.stateBeforePause,
+    this.isAlarmRinging = false,
     this.todaySessions = const [],
     this.allSessions = const [],
     this.settings = const PomodoroSettings(),
@@ -161,8 +168,13 @@ class PomodoroTimerState {
     int? completedWorkSessions,
     DateTime? sessionStartTime,
     DateTime? pausedAt,
+    DateTime? targetEndTime,
     bool clearPausedAt = false,
     bool clearSessionStartTime = false,
+    bool clearTargetEndTime = false,
+    PomodoroState? stateBeforePause,
+    bool clearStateBeforePause = false,
+    bool? isAlarmRinging,
     List<PomodoroSession>? todaySessions,
     List<PomodoroSession>? allSessions,
     PomodoroSettings? settings,
@@ -176,6 +188,12 @@ class PomodoroTimerState {
             ? null
             : (sessionStartTime ?? this.sessionStartTime),
         pausedAt: clearPausedAt ? null : (pausedAt ?? this.pausedAt),
+        targetEndTime:
+            clearTargetEndTime ? null : (targetEndTime ?? this.targetEndTime),
+        stateBeforePause: clearStateBeforePause
+            ? null
+            : (stateBeforePause ?? this.stateBeforePause),
+        isAlarmRinging: isAlarmRinging ?? this.isAlarmRinging,
         todaySessions: todaySessions ?? this.todaySessions,
         allSessions: allSessions ?? this.allSessions,
         settings: settings ?? this.settings,
@@ -197,12 +215,14 @@ class PomodoroTimerState {
   bool get isActive =>
       state == PomodoroState.working ||
       state == PomodoroState.shortBreak ||
-      state == PomodoroState.longBreak;
+      state == PomodoroState.longBreak ||
+      state == PomodoroState.paused;
 
   bool get isBreak =>
       state == PomodoroState.shortBreak || state == PomodoroState.longBreak;
 
   String get stateLabel {
+    if (isAlarmRinging) return 'Time\'s Up!';
     switch (state) {
       case PomodoroState.idle:
         return 'Ready to Start';
@@ -218,6 +238,7 @@ class PomodoroTimerState {
   }
 
   Color get stateColor {
+    if (isAlarmRinging) return const Color(0xFFFF4444);
     switch (state) {
       case PomodoroState.idle:
         return const Color(0xFF7B6EF6);
@@ -238,10 +259,9 @@ class PomodoroTimerState {
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
-  int get todayWorkSessionsCount =>
-      todaySessions
-          .where((s) => s.type == PomodoroSessionType.work && s.completed)
-          .length;
+  int get todayWorkSessionsCount => todaySessions
+      .where((s) => s.type == PomodoroSessionType.work && s.completed)
+      .length;
 
   int get todayTotalMinutes => todaySessions
       .where((s) => s.completed)

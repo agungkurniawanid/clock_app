@@ -1,23 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/app_providers.dart';
-import '../services/storage_service.dart';
 import '../theme/app_colors.dart';
 import 'signup_screen.dart';
 
-class LoginScreen extends ConsumerStatefulWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   bool _obscurePassword = true;
-  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -52,7 +48,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _proceedLogin();
+              Navigator.pop(context);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: primary,
@@ -67,42 +63,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ],
       ),
     );
-  }
-
-  void _proceedLogin() {
-    setState(() => _isLoading = true);
-
-    // Simulate login — UI only, no real logic
-    Future.delayed(const Duration(milliseconds: 800), () async {
-      if (!mounted) return;
-
-      final name = _emailCtrl.text.split('@').first;
-      final email = _emailCtrl.text;
-
-      // Sync banner should appear only if there are local tasks to migrate
-      final tasks = ref.read(taskListProvider);
-      final hasUnsynced = tasks.isNotEmpty;
-
-      // Persist auth session
-      await StorageService.saveAuthState(
-        isLoggedIn: true,
-        userName: name,
-        userEmail: email,
-      );
-      await StorageService.saveHasUnsynced(hasUnsynced);
-
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-
-      // Set logged-in state
-      ref.read(isLoggedInProvider.notifier).state = true;
-      ref.read(currentUserNameProvider.notifier).state = name;
-      ref.read(currentUserEmailProvider.notifier).state = email;
-      ref.read(hasUnsyncedLocalTasksProvider.notifier).state = hasUnsynced;
-
-      // Return to the previous screen (Profile/Settings tab)
-      Navigator.pop(context);
-    });
   }
 
   @override
@@ -246,27 +206,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 SizedBox(
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _login,
+                    onPressed: _login,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primary,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16)),
                     ),
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text(
-                            'Masuk',
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w700),
-                          ),
+                    child: const Text(
+                      'Masuk',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),

@@ -9,13 +9,29 @@ import '../theme/app_colors.dart';
 import '../utils/app_toast.dart';
 import 'add_task_screen.dart';
 
-class TaskDetailScreen extends ConsumerWidget {
+class TaskDetailScreen extends ConsumerStatefulWidget {
   final TaskModel task;
 
   const TaskDetailScreen({super.key, required this.task});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TaskDetailScreen> createState() => _TaskDetailScreenState();
+}
+
+class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Mark the in-app notification for this task as read when the detail opens.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref
+          .read(notificationListProvider.notifier)
+          .markReadByTaskId(widget.task.id);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textPrimary = Theme.of(context).textTheme.bodyLarge?.color;
     final textSecondary = Theme.of(context).textTheme.bodyMedium?.color;
@@ -25,8 +41,8 @@ class TaskDetailScreen extends ConsumerWidget {
 
     // Watch latest version of task
     final latestTask = ref.watch(taskListProvider).firstWhere(
-          (t) => t.id == task.id,
-          orElse: () => task,
+          (t) => t.id == widget.task.id,
+          orElse: () => widget.task,
         );
 
     return Scaffold(
@@ -456,6 +472,11 @@ class TaskDetailScreen extends ConsumerWidget {
   ) {
     final allDone = task.totalChecklistItems > 0 &&
         task.completedChecklistItems == task.totalChecklistItems;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final lineColor = primary.withValues(alpha: 0.28);
+    final totalItems = task.checklist.length + task.subTasks.length;
+    var idx = 0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -493,243 +514,176 @@ class TaskDetailScreen extends ConsumerWidget {
             ),
           ),
         ],
-        // Flat checklist items
-        if (task.checklist.isNotEmpty) ...[
-          ...task.checklist.map((item) => _checklistItemTile(
-                context,
-                item,
-                textPrimary,
-                primary,
-                textSecondary,
-                onToggle: () {
-                  final updated = task.copyWith(
-                    checklist: task.checklist
-                        .map((c) => c.id == item.id
-                            ? c.copyWith(isChecked: !c.isChecked)
-                            : c)
-                        .toList(),
-                  );
-                  _handleChecklistUpdate(context, updated, ref);
-                },
-              )),
-          if (task.subTasks.isNotEmpty) const SizedBox(height: 8),
+
+        // ── Progress bar ──────────────────────────────────────────────
+        if (task.totalChecklistItems > 0) ...[
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value:
+                        task.completedChecklistItems / task.totalChecklistItems,
+                    backgroundColor: isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.black.withValues(alpha: 0.06),
+                    color: allDone ? const Color(0xFF22C55E) : primary,
+                    minHeight: 6,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '${task.completedChecklistItems}/${task.totalChecklistItems}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: allDone ? const Color(0xFF22C55E) : primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
         ],
 
-        // Sub-tasks
-        ...task.subTasks.map((st) => _buildSubTaskDisplay(
-              context,
-              task,
-              st,
-              ref,
-              textPrimary,
-              textSecondary,
-              primary,
-            )),
+        // ── Flat checklist items (tree style) ────────────────────────
+        ...List<Widget>.generate(task.checklist.length, (i) {
+          final item = task.checklist[i];
+          idx++;
+          final isLast = idx == totalItems;
+          return _treeItemRow(
+            isLast: isLast,
+            lineColor: lineColor,
+            child: _checklistItemContent(
+              context: context,
+              item: item,
+              textPrimary: textPrimary,
+              primary: primary,
+              textSecondary: textSecondary,
+              onToggle: () {
+                final updated = task.copyWith(
+                  checklist: task.checklist
+                      .map((c) => c.id == item.id
+                          ? c.copyWith(isChecked: !c.isChecked)
+                          : c)
+                      .toList(),
+                );
+                _handleChecklistUpdate(context, updated, ref);
+              },
+            ),
+          );
+        }),
+
+        // ── Sub-tasks (tree style) ────────────────────────────────────
+        ...List<Widget>.generate(task.subTasks.length, (i) {
+          final st = task.subTasks[i];
+          idx++;
+          final isLast = idx == totalItems;
+          return _treeSubTaskRow(
+            context: context,
+            task: task,
+            st: st,
+            ref: ref,
+            isLast: isLast,
+            textPrimary: textPrimary,
+            textSecondary: textSecondary,
+            primary: primary,
+            lineColor: lineColor,
+          );
+        }),
       ],
     );
   }
 
-  Widget _buildSubTaskDisplay(
-    BuildContext context,
-    TaskModel task,
-    SubTask st,
-    WidgetRef ref,
-    Color? textPrimary,
-    Color? textSecondary,
-    Color primary, {
-    int depth = 0,
-  }) {
-    final hasChecklist = st.checklist.isNotEmpty;
-    final hasNestedSubTasks = st.subTasks.isNotEmpty;
-    final isCompleted = st.status == TaskStatus.completed;
-    final canComplete = st.canBeCompleted; // Can only complete if no checklist or all checklist checked
+  // ── Tree-line design helpers ─────────────────────────────────────────────
 
-    return Padding(
-      padding: EdgeInsets.only(left: depth * 16.0, bottom: 8),
-      child: (hasChecklist || hasNestedSubTasks)
-          ? Theme(
-              data:
-                  Theme.of(context).copyWith(dividerColor: Colors.transparent),
-              child: ExpansionTile(
-                tilePadding: EdgeInsets.zero,
-                childrenPadding: const EdgeInsets.only(left: 16, bottom: 6),
-                leading: Checkbox(
-                  value: isCompleted,
-                  activeColor: primary,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4)),
-                  // Disable checkbox if subtask has incomplete checklist items or nested subtasks
-                  onChanged: canComplete
-                      ? (_) {
-                          final newStatus = isCompleted
-                              ? TaskStatus.todo
-                              : TaskStatus.completed;
-                          _updateSubTaskStatus(context, task, st.id, newStatus, ref);
-                        }
-                      : null,
+  /// Draws a ├── or └── tree connector on the left, then renders [child].
+  Widget _treeItemRow({
+    required Widget child,
+    required bool isLast,
+    required Color lineColor,
+  }) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Tree line column (22 px wide)
+          SizedBox(
+            width: 22,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Vertical: top segment to the connector point
+                Positioned(
+                  left: 9,
+                  top: 0,
+                  child: Container(width: 1.5, height: 22, color: lineColor),
                 ),
-                title: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      st.title,
-                      style: TextStyle(
-                        color: textPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        decoration:
-                            isCompleted ? TextDecoration.lineThrough : null,
-                        decorationColor: textPrimary?.withValues(alpha: 0.5),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    // Metadata badges
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        // Due date badge
-                        if (st.dueDateEnabled && st.dueDate != null)
-                          _enhancedBadge(
-                            context,
-                            Icons.calendar_today_rounded,
-                            '${st.dueDateLabel}${st.dueTime != null ? ' ${st.dueTimeLabel}' : ''}',
-                            primary,
-                          ),
-                        // Priority badge
-                        _enhancedBadge(
-                          context,
-                          Icons.flag_rounded,
-                          st.priorityLabel,
-                          _priorityColor(st.priority),
-                        ),
-                        // Category badge
-                        _enhancedBadge(
-                          context,
-                          Icons.folder_rounded,
-                          st.categoryLabel,
-                          textSecondary,
-                        ),
-                        // Checklist progress
-                        if (st.totalChecklistItems > 0)
-                          _enhancedBadge(
-                            context,
-                            Icons.checklist_rounded,
-                            '${st.completedChecklistItems}/${st.totalChecklistItems}',
-                            textSecondary,
-                          ),
-                      ],
-                    ),
-                  ],
+                // Vertical: continuation line to next sibling
+                if (!isLast)
+                  Positioned(
+                    left: 9,
+                    top: 22,
+                    bottom: 0,
+                    child: Container(width: 1.5, color: lineColor),
+                  ),
+                // Horizontal: connector ─────
+                Positioned(
+                  left: 9,
+                  top: 21,
+                  right: 0,
+                  child: Container(height: 1.5, color: lineColor),
                 ),
-                iconColor: textSecondary,
-                collapsedIconColor: textSecondary,
-                children: [
-                  // Checklist items for this subtask
-                  if (hasChecklist) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(children: [
-                        Icon(Icons.checklist_rounded,
-                            size: 12, color: textSecondary),
-                        const SizedBox(width: 6),
-                        Text('Checklist',
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: textSecondary,
-                                fontWeight: FontWeight.w600)),
-                      ]),
-                    ),
-                    ...st.checklist.map((c) => _checklistItemTile(
-                          context,
-                          c,
-                          textPrimary,
-                          primary,
-                          textSecondary,
-                          compact: true,
-                          onToggle: () {
-                            _updateSubTaskChecklist(context, task, st.id, c.id, ref);
-                          },
-                        )),
-                    if (hasNestedSubTasks) const SizedBox(height: 8),
-                  ],
-                  // Nested subtasks (recursive)
-                  if (hasNestedSubTasks) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(children: [
-                        Icon(Icons.assignment_rounded,
-                            size: 12, color: textSecondary),
-                        const SizedBox(width: 6),
-                        Text('Sub-tasks',
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: textSecondary,
-                                fontWeight: FontWeight.w600)),
-                      ]),
-                    ),
-                    ...st.subTasks.map((nestedSt) => _buildSubTaskDisplay(
-                          context,
-                          task,
-                          nestedSt,
-                          ref,
-                          textPrimary,
-                          textSecondary,
-                          primary,
-                          depth: 0, // Keep depth at 0 for nested subtasks within expansion tile
-                        )),
-                  ],
-                ],
-              ),
-            )
-          : _subtaskItemTile(
-              context,
-              st,
-              task,
-              ref,
-              textPrimary,
-              textSecondary,
-              primary,
+              ],
             ),
+          ),
+          // Content
+          Expanded(child: child),
+        ],
+      ),
     );
   }
 
-  Widget _checklistItemTile(
-    BuildContext context,
-    ChecklistItem item,
-    Color? textPrimary,
-    Color primary,
-    Color? textSecondary, {
+  /// Checklist leaf item rendered inside a tree node.
+  Widget _checklistItemContent({
+    required BuildContext context,
+    required ChecklistItem item,
+    required Color? textPrimary,
+    required Color primary,
+    required Color? textSecondary,
     VoidCallback? onToggle,
-    bool compact = false,
+    bool isSubLevel = false,
   }) {
     return InkWell(
       onTap: onToggle,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(6),
       child: Padding(
-        padding: EdgeInsets.symmetric(vertical: compact ? 3 : 5, horizontal: 2),
+        padding:
+            EdgeInsets.symmetric(vertical: isSubLevel ? 3 : 5, horizontal: 2),
         child: Row(
           children: [
             SizedBox(
-              width: compact ? 28 : 32,
-              height: compact ? 28 : 32,
+              width: 26,
+              height: 26,
               child: Checkbox(
                 value: item.isChecked,
                 activeColor: primary,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(4)),
                 onChanged: onToggle != null ? (_) => onToggle() : null,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 item.title,
                 style: TextStyle(
                   color: item.isChecked
-                      ? textPrimary?.withValues(alpha: 0.45)
+                      ? textPrimary?.withValues(alpha: 0.4)
                       : textPrimary,
-                  fontSize: compact ? 12 : 14,
+                  fontSize: isSubLevel ? 13 : 14,
                   fontWeight: FontWeight.w400,
                   decoration:
                       item.isChecked ? TextDecoration.lineThrough : null,
@@ -737,106 +691,241 @@ class TaskDetailScreen extends ConsumerWidget {
                 ),
               ),
             ),
+            if (item.isChecked) ...[
+              Icon(Icons.check_circle_rounded,
+                  size: 15, color: primary.withValues(alpha: 0.55)),
+              const SizedBox(width: 2),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _subtaskItemTile(
-    BuildContext context,
-    SubTask st,
-    TaskModel task,
-    WidgetRef ref,
-    Color? textPrimary,
-    Color? textSecondary,
-    Color primary, {
-    bool compact = false,
+  /// Sub-task tree node.  Shows a header row plus, if the sub-task has
+  /// checklist items or nested sub-tasks, renders them below with their
+  /// own tree connectors.
+  Widget _treeSubTaskRow({
+    required BuildContext context,
+    required TaskModel task,
+    required SubTask st,
+    required WidgetRef ref,
+    required bool isLast,
+    required Color? textPrimary,
+    required Color? textSecondary,
+    required Color primary,
+    required Color lineColor,
   }) {
+    final hasChildren = st.checklist.isNotEmpty || st.subTasks.isNotEmpty;
     final isCompleted = st.status == TaskStatus.completed;
+    final canComplete = st.canBeCompleted;
 
-    return InkWell(
-      onTap: () {
-        final newStatus =
-            isCompleted ? TaskStatus.todo : TaskStatus.completed;
-        _updateSubTaskStatus(context, task, st.id, newStatus, ref);
-      },
-      borderRadius: BorderRadius.circular(8),
+    void toggle() {
+      final newStatus = isCompleted ? TaskStatus.todo : TaskStatus.completed;
+      _updateSubTaskStatus(context, task, st.id, newStatus, ref);
+    }
+
+    return _treeItemRow(
+      isLast: isLast,
+      lineColor: lineColor,
       child: Padding(
-        padding: EdgeInsets.symmetric(vertical: compact ? 3 : 6, horizontal: 2),
-        child: Row(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(
-              width: compact ? 28 : 32,
-              height: compact ? 28 : 32,
-              child: Checkbox(
-                value: isCompleted,
-                activeColor: primary,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6)),
-                onChanged: (_) {
-                  final newStatus =
-                      isCompleted ? TaskStatus.todo : TaskStatus.completed;
-                  _updateSubTaskStatus(context, task, st.id, newStatus, ref);
-                },
-              ),
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    st.title,
-                    style: TextStyle(
-                      color: isCompleted
-                          ? textPrimary?.withValues(alpha: 0.45)
-                          : textPrimary,
-                      fontSize: compact ? 13 : 15,
-                      fontWeight: FontWeight.w700,
-                      decoration:
-                          isCompleted ? TextDecoration.lineThrough : null,
-                      decorationColor: textPrimary?.withValues(alpha: 0.4),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 2,
-                    children: [
-                      // Due date badge
-                      if (st.dueDateEnabled && st.dueDate != null)
-                        _enhancedBadge(
-                          context,
-                          Icons.calendar_today_rounded,
-                          '${st.dueDateLabel}${st.dueTime != null ? ' ${st.dueTimeLabel}' : ''}',
-                          primary,
-                          compact: true,
+            // ── Sub-task header ─────────────────────────────────────
+            InkWell(
+              onTap: canComplete ? toggle : null,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Checkbox
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: SizedBox(
+                        width: 26,
+                        height: 26,
+                        child: Checkbox(
+                          value: isCompleted,
+                          activeColor: primary,
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(hasChildren ? 13 : 6)),
+                          onChanged: canComplete ? (_) => toggle() : null,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
                         ),
-                      // Priority badge
-                      _enhancedBadge(
-                        context,
-                        Icons.flag_rounded,
-                        st.priorityLabel,
-                        _priorityColor(st.priority),
-                        compact: true,
                       ),
-                      // Category badge
-                      _enhancedBadge(
-                        context,
-                        Icons.folder_rounded,
-                        st.categoryLabel,
-                        textSecondary,
-                        compact: true,
+                    ),
+                    const SizedBox(width: 8),
+                    // Sub-task info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // "SUB-TASK" chip label
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: primary.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'SUB-TASK',
+                              style: TextStyle(
+                                fontSize: 8,
+                                fontWeight: FontWeight.w800,
+                                color: primary.withValues(alpha: 0.8),
+                                letterSpacing: 0.7,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          // Title
+                          Text(
+                            st.title,
+                            style: TextStyle(
+                              color: isCompleted
+                                  ? textPrimary?.withValues(alpha: 0.45)
+                                  : textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              decoration: isCompleted
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                              decorationColor:
+                                  textPrimary?.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          // Metadata badges
+                          Wrap(
+                            spacing: 4,
+                            runSpacing: 2,
+                            children: [
+                              if (st.dueDateEnabled && st.dueDate != null)
+                                _enhancedBadge(
+                                  context,
+                                  Icons.calendar_today_rounded,
+                                  '${st.dueDateLabel}${st.dueTime != null ? ' ${st.dueTimeLabel}' : ''}',
+                                  primary,
+                                  compact: true,
+                                ),
+                              _enhancedBadge(
+                                context,
+                                Icons.flag_rounded,
+                                st.priorityLabel,
+                                _priorityColor(st.priority),
+                                compact: true,
+                              ),
+                              _enhancedBadge(
+                                context,
+                                Icons.folder_rounded,
+                                st.categoryLabel,
+                                textSecondary,
+                                compact: true,
+                              ),
+                              if (st.totalChecklistItems > 0)
+                                _enhancedBadge(
+                                  context,
+                                  Icons.checklist_rounded,
+                                  '${st.completedChecklistItems}/${st.totalChecklistItems}',
+                                  textSecondary,
+                                  compact: true,
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                        ],
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             ),
+            // ── Children tree ─────────────────────────────────────
+            if (hasChildren)
+              Padding(
+                padding: const EdgeInsets.only(left: 20, top: 2),
+                child: _buildSubTaskChildrenTree(
+                  context: context,
+                  task: task,
+                  st: st,
+                  ref: ref,
+                  textPrimary: textPrimary,
+                  textSecondary: textSecondary,
+                  primary: primary,
+                  lineColor: lineColor,
+                ),
+              ),
           ],
         ),
       ),
+    );
+  }
+
+  /// Recursively renders checklist items and nested sub-tasks of [st]
+  /// with their own tree-line connectors.
+  Widget _buildSubTaskChildrenTree({
+    required BuildContext context,
+    required TaskModel task,
+    required SubTask st,
+    required WidgetRef ref,
+    required Color? textPrimary,
+    required Color? textSecondary,
+    required Color primary,
+    required Color lineColor,
+  }) {
+    final totalChildren = st.checklist.length + st.subTasks.length;
+    var childIdx = 0;
+    final widgets = <Widget>[];
+
+    for (final c in st.checklist) {
+      childIdx++;
+      final isLast = childIdx == totalChildren;
+      widgets.add(
+        _treeItemRow(
+          isLast: isLast,
+          lineColor: lineColor,
+          child: _checklistItemContent(
+            context: context,
+            item: c,
+            textPrimary: textPrimary,
+            primary: primary,
+            textSecondary: textSecondary,
+            isSubLevel: true,
+            onToggle: () =>
+                _updateSubTaskChecklist(context, task, st.id, c.id, ref),
+          ),
+        ),
+      );
+    }
+
+    for (final nst in st.subTasks) {
+      childIdx++;
+      final isLast = childIdx == totalChildren;
+      widgets.add(
+        _treeSubTaskRow(
+          context: context,
+          task: task,
+          st: nst,
+          ref: ref,
+          isLast: isLast,
+          textPrimary: textPrimary,
+          textSecondary: textSecondary,
+          primary: primary,
+          lineColor: lineColor,
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: widgets,
     );
   }
 
@@ -898,8 +987,8 @@ class TaskDetailScreen extends ConsumerWidget {
   }
 
   // ── Helper untuk update subtask status (recursive) ─────────────────────────
-  void _updateSubTaskStatus(
-      BuildContext context, TaskModel task, String subTaskId, TaskStatus newStatus, WidgetRef ref) {
+  void _updateSubTaskStatus(BuildContext context, TaskModel task,
+      String subTaskId, TaskStatus newStatus, WidgetRef ref) {
     final updated = task.copyWith(
       subTasks: _updateSubTaskStatusInList(task.subTasks, subTaskId, newStatus),
     );
@@ -914,7 +1003,8 @@ class TaskDetailScreen extends ConsumerWidget {
       } else if (st.subTasks.isNotEmpty) {
         // Recursively update nested subtasks
         return st.copyWith(
-          subTasks: _updateSubTaskStatusInList(st.subTasks, subTaskId, newStatus),
+          subTasks:
+              _updateSubTaskStatusInList(st.subTasks, subTaskId, newStatus),
         );
       }
       return st;
@@ -922,10 +1012,11 @@ class TaskDetailScreen extends ConsumerWidget {
   }
 
   // ── Helper untuk update subtask checklist (recursive) ──────────────────────
-  void _updateSubTaskChecklist(
-      BuildContext context, TaskModel task, String subTaskId, String checklistId, WidgetRef ref) {
+  void _updateSubTaskChecklist(BuildContext context, TaskModel task,
+      String subTaskId, String checklistId, WidgetRef ref) {
     final updated = task.copyWith(
-      subTasks: _updateSubTaskChecklistInList(task.subTasks, subTaskId, checklistId),
+      subTasks:
+          _updateSubTaskChecklistInList(task.subTasks, subTaskId, checklistId),
     );
     _handleChecklistUpdate(context, updated, ref);
   }
@@ -944,7 +1035,8 @@ class TaskDetailScreen extends ConsumerWidget {
       } else if (st.subTasks.isNotEmpty) {
         // Recursively update nested subtasks
         return st.copyWith(
-          subTasks: _updateSubTaskChecklistInList(st.subTasks, subTaskId, checklistId),
+          subTasks: _updateSubTaskChecklistInList(
+              st.subTasks, subTaskId, checklistId),
         );
       }
       return st;

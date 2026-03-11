@@ -9,7 +9,6 @@ import '../theme/app_colors.dart';
 import '../utils/app_toast.dart';
 import '../data/dummy_data.dart';
 import 'birthday_screen.dart';
-import 'signup_screen.dart';
 import 'music_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -25,16 +24,13 @@ class SettingsScreen extends ConsumerWidget {
     final vibration = ref.watch(vibrationEnabledProvider);
     final dnd = ref.watch(dndEnabledProvider);
     final accentIndex = ref.watch(accentColorIndexProvider);
+    final fontScaleIndex = ref.watch(fontScaleIndexProvider);
     final defaultVol = ref.watch(defaultVolumeProvider);
     final defaultSnooze = ref.watch(defaultSnoozeProvider);
     final defaultMusic = ref.watch(defaultMusicProvider);
     final defaultRemind = ref.watch(defaultReminderProvider);
     final defaultNotifMusic = ref.watch(defaultNotifMusicProvider);
     final defaultNotifVol = ref.watch(defaultNotifVolumeProvider);
-    final isLoggedIn = ref.watch(isLoggedInProvider);
-    final userName = ref.watch(currentUserNameProvider);
-    final userEmail = ref.watch(currentUserEmailProvider);
-    final hasUnsynced = ref.watch(hasUnsyncedLocalTasksProvider);
     final accentColors = [darkPrimary, darkSecondary, darkAccent, statusTodo];
 
     return Scaffold(
@@ -43,8 +39,7 @@ class SettingsScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(20),
         children: [
           // Profile
-          _buildProfileSection(
-              context, ref, card, isDark, isLoggedIn, userName, userEmail),
+          _buildProfileSection(context, ref, card, isDark),
           const SizedBox(height: 20),
 
           // ── Ulang Tahun ────────────────────────────────────────────────────
@@ -61,10 +56,7 @@ class SettingsScreen extends ConsumerWidget {
           ]),
           const SizedBox(height: 20),
 
-          // Sync Banner
-          if (isLoggedIn && hasUnsynced) _buildSyncBanner(context, ref, isDark),
-          if (isLoggedIn && hasUnsynced) const SizedBox(height: 20),
-          if (!isLoggedIn || !hasUnsynced) const SizedBox(height: 8),
+          const SizedBox(height: 8),
 
           // ── Appearance ─────────────────────────────────────────────────────
           _sectionTitle(context, 'Appearance'),
@@ -118,6 +110,88 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                   );
                 }),
+              ),
+            ),
+            _divider(context),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.text_fields_rounded,
+                          size: 20,
+                          color: Theme.of(context).textTheme.bodyLarge?.color),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Ukuran Teks',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w500, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const SizedBox(width: 32),
+                      ...List.generate(4, (i) {
+                        const labels = ['Kecil', 'Normal', 'Besar', 'XL'];
+                        const scales = [0.85, 1.0, 1.15, 1.3];
+                        final selected = i == fontScaleIndex;
+                        final primary = Theme.of(context).colorScheme.primary;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: GestureDetector(
+                            onTap: () async {
+                              ref.read(fontScaleIndexProvider.notifier).state =
+                                  i;
+                              await StorageService.saveFontScaleIndex(i);
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: selected
+                                    ? primary
+                                    : (isDark
+                                        ? Colors.white.withValues(alpha: 0.08)
+                                        : Colors.black.withValues(alpha: 0.06)),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: selected
+                                    ? [
+                                        BoxShadow(
+                                          color: primary.withValues(alpha: 0.4),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ]
+                                    : null,
+                              ),
+                              child: Text(
+                                labels[i],
+                                style: TextStyle(
+                                  fontSize: 11 * scales[i],
+                                  fontWeight: selected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  color: selected
+                                      ? Colors.white
+                                      : Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.color
+                                          ?.withValues(alpha: 0.7),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ],
               ),
             ),
           ]),
@@ -437,25 +511,6 @@ class SettingsScreen extends ConsumerWidget {
           ]),
           const SizedBox(height: 20),
 
-          // ── Account (logged in only) ───────────────────────────────────────
-          if (isLoggedIn) ...[
-            const SizedBox(height: 20),
-            _sectionTitle(context, 'Akun'),
-            _buildCard(context, card, [
-              _settingRowNav(context,
-                  icon: Icons.person_outline_rounded,
-                  label: 'Edit Profil',
-                  onTap: () {}),
-              _divider(context),
-              _settingRowNav(
-                context,
-                icon: Icons.logout_rounded,
-                label: 'Keluar',
-                color: statusOverdue,
-                onTap: () => _showLogoutDialog(context, ref),
-              ),
-            ]),
-          ],
           const SizedBox(height: 40),
         ],
       ),
@@ -463,71 +518,9 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   // ── Profile Section ───────────────────────────────────────────────────────
-  Widget _buildProfileSection(BuildContext context, WidgetRef ref, Color card,
-      bool isDark, bool isLoggedIn, String userName, String userEmail) {
+  Widget _buildProfileSection(
+      BuildContext context, WidgetRef ref, Color card, bool isDark) {
     final primary = Theme.of(context).colorScheme.primary;
-
-    if (!isLoggedIn) {
-      return Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: card,
-          borderRadius: BorderRadius.circular(20),
-          gradient:
-              LinearGradient(colors: [primary.withValues(alpha: 0.10), card]),
-        ),
-        child: Column(children: [
-          Row(children: [
-            Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                  color: primary.withValues(alpha: 0.15),
-                  shape: BoxShape.circle),
-              child: Icon(Icons.person_rounded, color: primary, size: 32),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Anda belum login',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 3),
-                    Text('Masuk untuk sinkronisasi task ke cloud',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontSize: 12,
-                              color: isDark
-                                  ? darkTextSecondary
-                                  : lightTextSecondary,
-                            )),
-                  ]),
-            ),
-          ]),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: ElevatedButton.icon(
-              onPressed: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const SignUpScreen())),
-              icon: const Icon(Icons.login_rounded, size: 18),
-              label: const Text('Masuk / Daftar',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ),
-        ]),
-      );
-    }
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -535,92 +528,52 @@ class SettingsScreen extends ConsumerWidget {
         color: card,
         borderRadius: BorderRadius.circular(20),
         gradient:
-            LinearGradient(colors: [primary.withValues(alpha: 0.15), card]),
+            LinearGradient(colors: [primary.withValues(alpha: 0.10), card]),
       ),
-      child: Row(children: [
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-              color: primary.withValues(alpha: 0.2), shape: BoxShape.circle),
-          child: Center(
-            child: Text(
-              userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
-              style: TextStyle(
-                  color: primary, fontSize: 24, fontWeight: FontWeight.w800),
+      child: Column(children: [
+        Row(children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+                color: primary.withValues(alpha: 0.15), shape: BoxShape.circle),
+            child: Icon(Icons.person_rounded, color: primary, size: 32),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Profil & Sinkronisasi',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 3),
+              Text('Fitur ini sedang dalam pengembangan',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontSize: 12,
+                        color: isDark ? darkTextSecondary : lightTextSecondary,
+                      )),
+            ]),
+          ),
+        ]),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: ElevatedButton.icon(
+            onPressed: () => AppToast.show(
+                context, 'Fitur auth & sinkronisasi sedang dalam pengembangan'),
+            icon: const Icon(Icons.construction_rounded, size: 18),
+            label: const Text('Segera Hadir',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primary.withValues(alpha: 0.5),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
           ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(userName.isNotEmpty ? userName : 'Pengguna',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 3),
-            Text(userEmail,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 12,
-                    color: isDark ? darkTextSecondary : lightTextSecondary)),
-          ]),
-        ),
-        Icon(Icons.chevron_right_rounded,
-            color: Theme.of(context).textTheme.bodyMedium?.color),
-      ]),
-    );
-  }
-
-  Widget _buildSyncBanner(BuildContext context, WidgetRef ref, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: statusRisk.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(16),
-        border:
-            Border.all(color: statusRisk.withValues(alpha: 0.5), width: 1.5),
-      ),
-      child: Row(children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-              color: statusRisk.withValues(alpha: 0.2), shape: BoxShape.circle),
-          child: const Icon(Icons.cloud_upload_rounded,
-              color: statusRisk, size: 22),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Task lokal belum tersinkronisasi',
-                style: TextStyle(
-                    color: statusRisk,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13)),
-            const SizedBox(height: 2),
-            Text('Pindahkan task lokal Anda ke cloud.',
-                style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? darkTextSecondary : lightTextSecondary)),
-          ]),
-        ),
-        const SizedBox(width: 10),
-        ElevatedButton(
-          onPressed: () => _showSyncDialog(context, ref),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: statusRisk,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          child: const Text('Sync',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
         ),
       ]),
     );
@@ -711,67 +664,6 @@ class SettingsScreen extends ConsumerWidget {
 
   Widget _divider(BuildContext context) {
     return Divider(height: 1, color: Theme.of(context).dividerTheme.color);
-  }
-
-  void _showSyncDialog(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Sinkronisasi Task'),
-        content: const Text('Pindahkan semua task lokal ke akun cloud Anda?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              ref.read(hasUnsyncedLocalTasksProvider.notifier).state = false;
-              await StorageService.saveHasUnsynced(false);
-              if (context.mounted) {
-                AppToast.show(
-                  context,
-                  'Task lokal berhasil disinkronisasi.',
-                  type: ToastType.success,
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: statusRisk, foregroundColor: Colors.white),
-            child: const Text('Sync Sekarang'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showLogoutDialog(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Keluar'),
-        content: const Text('Apakah Anda yakin ingin keluar dari akun?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              ref.read(isLoggedInProvider.notifier).state = false;
-              ref.read(currentUserNameProvider.notifier).state = '';
-              ref.read(currentUserEmailProvider.notifier).state = '';
-              ref.read(hasUnsyncedLocalTasksProvider.notifier).state = true;
-              await StorageService.clearAuthState();
-              await StorageService.saveHasUnsynced(true);
-            },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: statusOverdue, foregroundColor: Colors.white),
-            child: const Text('Keluar'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showClearDialog(BuildContext context, WidgetRef ref) {

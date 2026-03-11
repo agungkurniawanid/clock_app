@@ -114,6 +114,30 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
     }
   }
 
+  /// Stops the alarm without opening the task detail.
+  ///
+  /// Used by the "Stop Only" button so that the task is added to the in-app
+  /// notification inbox (the user explicitly chose not to view the detail now).
+  Future<void> _stopOnly() async {
+    final tasks = ref.read(taskListProvider);
+    final taskId = ref.read(activeAlarmTaskIdProvider);
+    TaskModel? task;
+    if (taskId != null) {
+      final matched = tasks.where((t) => t.id == taskId).toList();
+      if (matched.isNotEmpty) task = matched.first;
+    }
+
+    await AudioService.instance.stop();
+    ref.read(alarmActiveProvider.notifier).state = false;
+
+    // Add to in-app notification inbox so the user can review it later.
+    if (task != null) {
+      await ref.read(notificationListProvider.notifier).addFromTask(task);
+    }
+
+    if (mounted) Navigator.pop(context);
+  }
+
   Future<void> _stopAndComplete() async {
     final taskId = ref.read(activeAlarmTaskIdProvider);
     if (taskId != null) {
@@ -352,7 +376,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: OutlinedButton.icon(
-                                    onPressed: _stopAlarm,
+                                    onPressed: _stopOnly,
                                     icon: const Icon(Icons.stop_rounded,
                                         size: 18),
                                     label: const Text('Stop Only'),

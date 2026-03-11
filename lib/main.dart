@@ -15,6 +15,7 @@ import 'screens/statistics_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/alarm_screen.dart';
 import 'screens/add_task_screen.dart';
+import 'screens/pomodoro_screen.dart';
 import 'models/task_model.dart';
 
 /// Global [NavigatorKey] used by [NotificationService] to push AlarmScreen
@@ -36,13 +37,6 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final onboardingDone = prefs.getBool('onboarding_done') ?? false;
 
-  // Restore persisted auth state
-  final authState = await StorageService.loadAuthState();
-  final savedIsLoggedIn = authState['isLoggedIn'] as bool;
-  final savedUserName = authState['userName'] as String;
-  final savedUserEmail = authState['userEmail'] as String;
-  final savedHasUnsynced = await StorageService.loadHasUnsynced();
-
   // Restore persisted settings
   final savedTheme = await StorageService.loadThemeMode();
   final savedMusic = await StorageService.loadDefaultMusic();
@@ -56,6 +50,7 @@ void main() async {
   final savedNotifVolume = await StorageService.loadDefaultNotifVolume();
   final savedBirthdayBadgeDismissed =
       await StorageService.loadBirthdayBadgeDismissed();
+  final savedFontScaleIndex = await StorageService.loadFontScaleIndex();
 
   // Apply settings to NotificationService static fields
   NotificationService.vibrationEnabled = savedVib;
@@ -83,12 +78,9 @@ void main() async {
         defaultReminderProvider.overrideWith((_) => savedRemind),
         defaultNotifMusicProvider.overrideWith((_) => savedNotifMusic),
         defaultNotifVolumeProvider.overrideWith((_) => savedNotifVolume),
-        isLoggedInProvider.overrideWith((_) => savedIsLoggedIn),
-        currentUserNameProvider.overrideWith((_) => savedUserName),
-        currentUserEmailProvider.overrideWith((_) => savedUserEmail),
-        hasUnsyncedLocalTasksProvider.overrideWith((_) => savedHasUnsynced),
         birthdayBadgePermanentlyDismissedProvider
             .overrideWith((_) => savedBirthdayBadgeDismissed),
+        fontScaleIndexProvider.overrideWith((_) => savedFontScaleIndex),
       ],
       child: const SmartAlarmApp(),
     ),
@@ -111,6 +103,10 @@ class SmartAlarmApp extends ConsumerWidget {
     final accentIndex = ref.watch(accentColorIndexProvider);
     final accent =
         _accentColors[accentIndex.clamp(0, _accentColors.length - 1)];
+    final fontScaleIndex = ref.watch(fontScaleIndexProvider);
+    const fontScales = [0.85, 1.0, 1.15, 1.3];
+    final fontScale =
+        fontScales[fontScaleIndex.clamp(0, fontScales.length - 1)];
 
     return MaterialApp(
       title: 'Alarm Scheduler',
@@ -119,6 +115,16 @@ class SmartAlarmApp extends ConsumerWidget {
       themeMode: themeMode,
       theme: AppTheme.buildWithAccent(Brightness.light, accent),
       darkTheme: AppTheme.buildWithAccent(Brightness.dark, accent),
+      // Override system font scale so Android "large text" setting doesn't
+      // affect this app. Font size is controlled only by fontScaleIndexProvider.
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(fontScale),
+          ),
+          child: child!,
+        );
+      },
       home: const _AppEntry(),
     );
   }
@@ -143,6 +149,14 @@ class _AppEntryState extends ConsumerState<_AppEntry> {
     // starts playing immediately when the user taps the alarm notification or
     // when the full-screen intent auto-launches the app.
     NotificationService.onTap = (taskId) async {
+      // Jika notifikasi dari Pomodoro → arahkan ke PomodoroScreen
+      if (taskId == 'pomodoro') {
+        navigatorKey.currentState?.push(
+          MaterialPageRoute(builder: (_) => const PomodoroScreen()),
+        );
+        return;
+      }
+
       final tasks = ref.read(taskListProvider);
       final matched = tasks.where((t) => t.id == taskId).toList();
       if (matched.isNotEmpty && !ref.read(alarmActiveProvider)) {

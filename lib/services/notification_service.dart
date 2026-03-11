@@ -609,6 +609,7 @@ class NotificationService {
       title,
       body,
       const NotificationDetails(android: androidDetails, iOS: iosDetails),
+      payload: 'pomodoro',
     );
   }
 

@@ -7,6 +7,7 @@ import '../models/task_model.dart';
 import '../models/music_model.dart';
 import '../models/birthday_model.dart';
 import '../models/pomodoro_model.dart';
+import '../models/notification_item.dart';
 import '../services/holiday_service.dart';
 import '../services/notification_service.dart';
 import '../services/storage_service.dart';
@@ -14,6 +15,11 @@ import '../services/audio_service.dart';
 
 // ─── Theme Provider ───────────────────────────────────────────────────────────
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.light);
+
+// ─── Font Scale Provider ──────────────────────────────────────────────────────
+// Index: 0=Small (0.85×), 1=Normal (1.0×), 2=Large (1.15×), 3=XLarge (1.3×)
+// Default: 0 (Small). App font scale is independent of Android system setting.
+final fontScaleIndexProvider = StateProvider<int>((ref) => 0);
 
 // ─── Navigation Index ─────────────────────────────────────────────────────────
 final navIndexProvider = StateProvider<int>((ref) => 0);
@@ -26,7 +32,8 @@ final splashDoneProvider = StateProvider<bool>((ref) => false);
 
 // ─── Task Providers ───────────────────────────────────────────────────────────
 class TaskNotifier extends StateNotifier<List<TaskModel>> {
-  TaskNotifier() : super([]) {
+  final Ref _ref;
+  TaskNotifier(this._ref) : super([]) {
     _loadFromStorage();
   }
 
@@ -62,6 +69,7 @@ class TaskNotifier extends StateNotifier<List<TaskModel>> {
     await NotificationService.cancelTaskAlarm(id);
     state = state.where((t) => t.id != id).toList();
     await _save();
+    _ref.read(notificationListProvider.notifier).removeByTaskId(id);
   }
 
   Future<void> markComplete(String id) async {
@@ -77,6 +85,7 @@ class TaskNotifier extends StateNotifier<List<TaskModel>> {
           t,
     ];
     await _save();
+    _ref.read(notificationListProvider.notifier).removeByTaskId(id);
   }
 
   Future<void> markInProgress(String id) async {
@@ -261,7 +270,7 @@ class TaskNotifier extends StateNotifier<List<TaskModel>> {
 }
 
 final taskListProvider = StateNotifierProvider<TaskNotifier, List<TaskModel>>(
-    (ref) => TaskNotifier());
+    (ref) => TaskNotifier(ref));
 
 // ─── Task Filter / Search ─────────────────────────────────────────────────────
 final taskSearchQueryProvider = StateProvider<String>((ref) => '');
@@ -742,13 +751,33 @@ final holidayProvider = AsyncNotifierProvider<HolidayNotifier, HolidayState>(
 
 // ─── Pomodoro Timer Provider ──────────────────────────────────────────────────
 
-class PomodoroNotifier extends StateNotifier<PomodoroTimerState> {
+class PomodoroNotifier extends StateNotifier<PomodoroTimerState>
+    with WidgetsBindingObserver {
   PomodoroNotifier() : super(const PomodoroTimerState()) {
+    WidgetsBinding.instance.addObserver(this);
     _loadSettings();
     _loadTodaySessions();
   }
 
   Timer? _timer;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Saat app kembali ke foreground, koreksi sisa waktu berdasarkan waktu nyata
+    if (state == AppLifecycleState.resumed &&
+        this.state.isActive &&
+        this.state.state != PomodoroState.paused &&
+        this.state.targetEndTime != null) {
+      final remaining =
+          this.state.targetEndTime!.difference(DateTime.now()).inSeconds;
+      if (remaining <= 0) {
+        // Waktu sudah habis saat di background
+        _onTimerComplete();
+      } else {
+        this.state = this.state.copyWith(remainingSeconds: remaining);
+      }
+    }
+  }
 
   Future<void> _loadSettings() async {
     final saved = await StorageService.loadPomodoroSettings();
@@ -763,8 +792,8 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState> {
     final sessions = await StorageService.loadPomodoroSessions();
     final today = DateTime.now();
     final todaySessions = sessions.where((s) {
-      final sessionDate = DateTime(
-          s.startTime.year, s.startTime.month, s.startTime.day);
+      final sessionDate =
+          DateTime(s.startTime.year, s.startTime.month, s.startTime.day);
       final todayDate = DateTime(today.year, today.month, today.day);
       return sessionDate == todayDate;
     }).toList();
@@ -784,11 +813,15 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState> {
   void startWork() {
     _timer?.cancel();
     AudioService.instance.stop(); // Stop alarm sound if playing
+    final durationSeconds = state.settings.workDuration * 60;
     state = state.copyWith(
       state: PomodoroState.working,
-      remainingSeconds: state.settings.workDuration * 60,
+      remainingSeconds: durationSeconds,
       sessionStartTime: DateTime.now(),
+      targetEndTime: DateTime.now().add(Duration(seconds: durationSeconds)),
       clearPausedAt: true,
+      clearStateBeforePause: true,
+      isAlarmRinging: false,
     );
     _startTimer();
   }
@@ -796,11 +829,15 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState> {
   void startShortBreak() {
     _timer?.cancel();
     AudioService.instance.stop(); // Stop alarm sound if playing
+    final durationSeconds = state.settings.shortBreakDuration * 60;
     state = state.copyWith(
       state: PomodoroState.shortBreak,
-      remainingSeconds: state.settings.shortBreakDuration * 60,
+      remainingSeconds: durationSeconds,
       sessionStartTime: DateTime.now(),
+      targetEndTime: DateTime.now().add(Duration(seconds: durationSeconds)),
       clearPausedAt: true,
+      clearStateBeforePause: true,
+      isAlarmRinging: false,
     );
     _startTimer();
   }
@@ -808,11 +845,15 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState> {
   void startLongBreak() {
     _timer?.cancel();
     AudioService.instance.stop(); // Stop alarm sound if playing
+    final durationSeconds = state.settings.longBreakDuration * 60;
     state = state.copyWith(
       state: PomodoroState.longBreak,
-      remainingSeconds: state.settings.longBreakDuration * 60,
+      remainingSeconds: durationSeconds,
       sessionStartTime: DateTime.now(),
+      targetEndTime: DateTime.now().add(Duration(seconds: durationSeconds)),
       clearPausedAt: true,
+      clearStateBeforePause: true,
+      isAlarmRinging: false,
     );
     _startTimer();
   }
@@ -820,18 +861,24 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState> {
   void pause() {
     _timer?.cancel();
     state = state.copyWith(
+      stateBeforePause: state.state, // simpan state sebelum pause
       state: PomodoroState.paused,
       pausedAt: DateTime.now(),
+      clearTargetEndTime: true, // hapus targetEndTime saat pause
     );
   }
 
   void resume() {
     if (state.state == PomodoroState.paused) {
-      final previousState =
-          state.isBreak ? state.state : PomodoroState.working;
+      // gunakan stateBeforePause agar break juga bisa resume dengan benar
+      final previousState = state.stateBeforePause ?? PomodoroState.working;
+      final newTargetEnd =
+          DateTime.now().add(Duration(seconds: state.remainingSeconds));
       state = state.copyWith(
         state: previousState,
+        targetEndTime: newTargetEnd,
         clearPausedAt: true,
+        clearStateBeforePause: true,
       );
       _startTimer();
     }
@@ -845,6 +892,9 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState> {
       remainingSeconds: 0,
       clearSessionStartTime: true,
       clearPausedAt: true,
+      clearStateBeforePause: true,
+      clearTargetEndTime: true,
+      isAlarmRinging: false,
     );
   }
 
@@ -852,7 +902,7 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState> {
     _timer?.cancel();
     AudioService.instance.stop(); // Stop alarm sound if playing
     _completeCurrentSession(completed: false);
-    _autoStartNext();
+    _autoStartNext(withAlarm: false);
   }
 
   void _startTimer() {
@@ -884,21 +934,26 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState> {
           : 'Great job! Take a break 🎉',
     );
 
-    _autoStartNext();
+    _autoStartNext(withAlarm: true);
   }
 
   void _completeCurrentSession({required bool completed}) {
     if (state.sessionStartTime == null) return;
 
-    final sessionType = state.state == PomodoroState.working
+    // Jika sedang paused, gunakan stateBeforePause untuk tipe sesi yang benar
+    final activeState = state.state == PomodoroState.paused
+        ? (state.stateBeforePause ?? PomodoroState.working)
+        : state.state;
+
+    final sessionType = activeState == PomodoroState.working
         ? PomodoroSessionType.work
-        : (state.state == PomodoroState.shortBreak
+        : (activeState == PomodoroState.shortBreak
             ? PomodoroSessionType.shortBreak
             : PomodoroSessionType.longBreak);
 
-    final duration = state.state == PomodoroState.working
+    final duration = activeState == PomodoroState.working
         ? state.settings.workDuration
-        : (state.state == PomodoroState.shortBreak
+        : (activeState == PomodoroState.shortBreak
             ? state.settings.shortBreakDuration
             : state.settings.longBreakDuration);
 
@@ -915,18 +970,26 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState> {
     state = state.copyWith(
       todaySessions: updatedTodaySessions,
       allSessions: updatedAllSessions,
-      completedWorkSessions: sessionType == PomodoroSessionType.work && completed
-          ? state.completedWorkSessions + 1
-          : state.completedWorkSessions,
+      completedWorkSessions:
+          sessionType == PomodoroSessionType.work && completed
+              ? state.completedWorkSessions + 1
+              : state.completedWorkSessions,
     );
 
     _saveSessions();
   }
 
-  void _autoStartNext() {
-    if (state.state == PomodoroState.working) {
+  void _autoStartNext({bool withAlarm = false}) {
+    // Jika sedang paused, gunakan stateBeforePause untuk menentukan sesi mana yang baru selesai
+    final activeState = state.state == PomodoroState.paused
+        ? (state.stateBeforePause ?? PomodoroState.working)
+        : state.state;
+
+    if (activeState == PomodoroState.working) {
       // After work session
-      if (state.completedWorkSessions % state.settings.sessionsBeforeLongBreak == 0) {
+      if (state.completedWorkSessions %
+              state.settings.sessionsBeforeLongBreak ==
+          0) {
         // Long break
         if (state.settings.autoStartBreaks) {
           startLongBreak();
@@ -935,6 +998,7 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState> {
             state: PomodoroState.idle,
             remainingSeconds: state.settings.longBreakDuration * 60,
             clearSessionStartTime: true,
+            isAlarmRinging: withAlarm,
           );
         }
       } else {
@@ -946,6 +1010,7 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState> {
             state: PomodoroState.idle,
             remainingSeconds: state.settings.shortBreakDuration * 60,
             clearSessionStartTime: true,
+            isAlarmRinging: withAlarm,
           );
         }
       }
@@ -958,9 +1023,16 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState> {
           state: PomodoroState.idle,
           remainingSeconds: state.settings.workDuration * 60,
           clearSessionStartTime: true,
+          isAlarmRinging: withAlarm,
         );
       }
     }
+  }
+
+  /// Hentikan alarm tanpa mereset sesi (tetap di idle, siap mulai sesi berikutnya)
+  void stopAlarm() {
+    AudioService.instance.stop();
+    state = state.copyWith(isAlarmRinging: false);
   }
 
   void updateSettings(PomodoroSettings settings) {
@@ -969,12 +1041,14 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState> {
   }
 
   Future<void> deleteSession(PomodoroSession session) async {
-    final updatedAllSessions = state.allSessions.where((s) => s != session).toList();
+    final updatedAllSessions =
+        state.allSessions.where((s) => s != session).toList();
 
     // Update today's sessions as well
     final today = DateTime.now();
     final todaySessions = updatedAllSessions.where((s) {
-      final sessionDate = DateTime(s.startTime.year, s.startTime.month, s.startTime.day);
+      final sessionDate =
+          DateTime(s.startTime.year, s.startTime.month, s.startTime.day);
       final todayDate = DateTime(today.year, today.month, today.day);
       return sessionDate == todayDate;
     }).toList();
@@ -1001,6 +1075,7 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState> {
   @override
   void dispose() {
     _timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 }
@@ -1008,3 +1083,108 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState> {
 final pomodoroProvider =
     StateNotifierProvider<PomodoroNotifier, PomodoroTimerState>(
         (ref) => PomodoroNotifier());
+
+// ─── In-App Notification List ─────────────────────────────────────────────────
+
+/// Manages the in-app notification inbox.
+///
+/// An entry is added for every task whose scheduled start datetime has arrived
+/// (regardless of [AlarmMode]). It is marked as read when the user opens that
+/// task's detail screen.
+class NotificationNotifier extends StateNotifier<List<NotificationItem>> {
+  NotificationNotifier() : super([]) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final saved = await StorageService.loadNotifications();
+    state = saved;
+  }
+
+  Future<void> _save() async {
+    await StorageService.saveNotifications(state);
+  }
+
+  /// Checks the task list and adds an entry for each task whose start time
+  /// has arrived but doesn't yet have an entry in this inbox.
+  ///
+  /// Call this periodically (e.g. every minute from HomeScreen) and at startup.
+  Future<void> syncTriggeredTasks(List<TaskModel> tasks) async {
+    final now = DateTime.now();
+    final existingTaskIds = state.map((n) => n.taskId).toSet();
+
+    final toAdd = <NotificationItem>[];
+    for (final task in tasks) {
+      if (task.status == TaskStatus.completed) continue;
+      if (existingTaskIds.contains(task.id)) continue;
+
+      final startDt = DateTime(
+        task.date.year,
+        task.date.month,
+        task.date.day,
+        task.time.hour,
+        task.time.minute,
+      );
+      if (!startDt.isAfter(now)) {
+        toAdd.add(NotificationItem.fromTask(task));
+      }
+    }
+
+    if (toAdd.isEmpty) return;
+    state = [...state, ...toAdd];
+    await _save();
+  }
+
+  /// Explicitly adds a notification entry for [task].
+  ///
+  /// Used when the user presses "Stop Only" on the alarm screen — the alarm is
+  /// dismissed without viewing the task detail.
+  Future<void> addFromTask(TaskModel task) async {
+    final alreadyPresent = state.any((n) => n.taskId == task.id);
+    if (alreadyPresent) return;
+    state = [...state, NotificationItem.fromTask(task)];
+    await _save();
+  }
+
+  /// Marks the notification for [taskId] as read.
+  Future<void> markReadByTaskId(String taskId) async {
+    final idx = state.indexWhere((n) => n.taskId == taskId);
+    if (idx < 0) return;
+    if (state[idx].isRead) return; // already read — skip write
+    final updated = List<NotificationItem>.from(state);
+    updated[idx] = updated[idx].copyWith(isRead: true);
+    state = updated;
+    await _save();
+  }
+
+  /// Marks all notifications as read.
+  Future<void> markAllRead() async {
+    if (state.every((n) => n.isRead)) return;
+    state = state.map((n) => n.copyWith(isRead: true)).toList();
+    await _save();
+  }
+
+  /// Removes the notification entry for [taskId] (e.g. when a task is deleted
+  /// or completed).
+  Future<void> removeByTaskId(String taskId) async {
+    final before = state.length;
+    state = state.where((n) => n.taskId != taskId).toList();
+    if (state.length != before) await _save();
+  }
+
+  /// Dismisses (removes) a single notification item by its [id].
+  Future<void> dismissById(String id) async {
+    final before = state.length;
+    state = state.where((n) => n.id != id).toList();
+    if (state.length != before) await _save();
+  }
+}
+
+final notificationListProvider =
+    StateNotifierProvider<NotificationNotifier, List<NotificationItem>>(
+        (ref) => NotificationNotifier());
+
+/// Number of unread in-app notifications.
+final unreadNotificationCountProvider = Provider<int>((ref) {
+  return ref.watch(notificationListProvider).where((n) => !n.isRead).length;
+});
