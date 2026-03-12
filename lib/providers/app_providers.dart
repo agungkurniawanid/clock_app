@@ -283,12 +283,16 @@ final taskPriorityFilterProvider = StateProvider<TaskPriority?>((ref) => null);
 // true = ascending (oldest first), false = descending (newest first)
 final taskSortAscendingProvider = StateProvider<bool>((ref) => true);
 
+// 'startDate' = sort by task start date, 'dueDate' = sort by due date
+final taskSortFieldProvider = StateProvider<String>((ref) => 'startDate');
+
 final filteredTasksProvider = Provider<List<TaskModel>>((ref) {
   final tasks = ref.watch(taskListProvider);
   final query = ref.watch(taskSearchQueryProvider).toLowerCase();
   final tabIndex = ref.watch(taskTabIndexProvider);
   final priority = ref.watch(taskPriorityFilterProvider);
   final sortAsc = ref.watch(taskSortAscendingProvider);
+  final sortField = ref.watch(taskSortFieldProvider);
 
   var filtered = tasks;
 
@@ -328,10 +332,20 @@ final filteredTasksProvider = Provider<List<TaskModel>>((ref) {
     filtered = filtered.where((t) => t.priority == priority).toList();
   }
 
-  // Sort by start date
+  // Sort by selected field (startDate or dueDate)
   filtered = List.from(filtered)
-    ..sort((a, b) =>
-        sortAsc ? a.date.compareTo(b.date) : b.date.compareTo(a.date));
+    ..sort((a, b) {
+      final DateTime aDate;
+      final DateTime bDate;
+      if (sortField == 'dueDate') {
+        aDate = (a.dueDateEnabled && a.dueDate != null) ? a.dueDate! : a.date;
+        bDate = (b.dueDateEnabled && b.dueDate != null) ? b.dueDate! : b.date;
+      } else {
+        aDate = a.date;
+        bDate = b.date;
+      }
+      return sortAsc ? aDate.compareTo(bDate) : bDate.compareTo(aDate);
+    });
 
   return filtered;
 });
@@ -810,9 +824,9 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState>
     await StorageService.savePomodoroSessions(state.allSessions);
   }
 
-  void startWork() {
+  void startWork({bool keepAlarm = false}) {
     _timer?.cancel();
-    AudioService.instance.stop(); // Stop alarm sound if playing
+    if (!keepAlarm) AudioService.instance.stop(); // Stop alarm sound if playing
     final durationSeconds = state.settings.workDuration * 60;
     state = state.copyWith(
       state: PomodoroState.working,
@@ -821,14 +835,14 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState>
       targetEndTime: DateTime.now().add(Duration(seconds: durationSeconds)),
       clearPausedAt: true,
       clearStateBeforePause: true,
-      isAlarmRinging: false,
+      isAlarmRinging: keepAlarm,
     );
     _startTimer();
   }
 
-  void startShortBreak() {
+  void startShortBreak({bool keepAlarm = false}) {
     _timer?.cancel();
-    AudioService.instance.stop(); // Stop alarm sound if playing
+    if (!keepAlarm) AudioService.instance.stop(); // Stop alarm sound if playing
     final durationSeconds = state.settings.shortBreakDuration * 60;
     state = state.copyWith(
       state: PomodoroState.shortBreak,
@@ -837,14 +851,14 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState>
       targetEndTime: DateTime.now().add(Duration(seconds: durationSeconds)),
       clearPausedAt: true,
       clearStateBeforePause: true,
-      isAlarmRinging: false,
+      isAlarmRinging: keepAlarm,
     );
     _startTimer();
   }
 
-  void startLongBreak() {
+  void startLongBreak({bool keepAlarm = false}) {
     _timer?.cancel();
-    AudioService.instance.stop(); // Stop alarm sound if playing
+    if (!keepAlarm) AudioService.instance.stop(); // Stop alarm sound if playing
     final durationSeconds = state.settings.longBreakDuration * 60;
     state = state.copyWith(
       state: PomodoroState.longBreak,
@@ -853,7 +867,7 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState>
       targetEndTime: DateTime.now().add(Duration(seconds: durationSeconds)),
       clearPausedAt: true,
       clearStateBeforePause: true,
-      isAlarmRinging: false,
+      isAlarmRinging: keepAlarm,
     );
     _startTimer();
   }
@@ -992,7 +1006,8 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState>
           0) {
         // Long break
         if (state.settings.autoStartBreaks) {
-          startLongBreak();
+          // Auto-start: tetap putar alarm sambil sesi break dimulai
+          startLongBreak(keepAlarm: withAlarm);
         } else {
           state = state.copyWith(
             state: PomodoroState.idle,
@@ -1004,7 +1019,8 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState>
       } else {
         // Short break
         if (state.settings.autoStartBreaks) {
-          startShortBreak();
+          // Auto-start: tetap putar alarm sambil sesi break dimulai
+          startShortBreak(keepAlarm: withAlarm);
         } else {
           state = state.copyWith(
             state: PomodoroState.idle,
@@ -1017,7 +1033,8 @@ class PomodoroNotifier extends StateNotifier<PomodoroTimerState>
     } else {
       // After break
       if (state.settings.autoStartPomodoros) {
-        startWork();
+        // Auto-start: tetap putar alarm sambil sesi kerja dimulai
+        startWork(keepAlarm: withAlarm);
       } else {
         state = state.copyWith(
           state: PomodoroState.idle,

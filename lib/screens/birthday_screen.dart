@@ -381,10 +381,58 @@ class _BirthdayFormSheetState extends ConsumerState<_BirthdayFormSheet> {
   @override
   Widget build(BuildContext context) {
     const birthdayColor = Color(0xFFFF6B9D);
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+
+    InputDecoration fieldDecoration({
+      required String label,
+      String? hint,
+      Widget? prefix,
+    }) {
+      return InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: prefix,
+        filled: true,
+        fillColor: birthdayColor.withValues(alpha: 0.06),
+        labelStyle: TextStyle(color: onSurface.withValues(alpha: 0.6)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: birthdayColor.withValues(alpha: 0.3)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: birthdayColor.withValues(alpha: 0.25)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: birthdayColor, width: 1.8),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      );
+    }
+
+    final dropdownDecoration = InputDecoration(
+      filled: true,
+      fillColor: birthdayColor.withValues(alpha: 0.08),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: birthdayColor, width: 1.5),
+      ),
+    );
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
-          24, 12, 24, 28 + MediaQuery.of(context).viewInsets.bottom),
+          20, 12, 20, 24 + MediaQuery.of(context).viewInsets.bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -400,17 +448,48 @@ class _BirthdayFormSheetState extends ConsumerState<_BirthdayFormSheet> {
             ),
           ),
           const SizedBox(height: 16),
+
           // Header
           Row(
             children: [
-              const Text('🎂', style: TextStyle(fontSize: 22)),
-              const SizedBox(width: 8),
-              Text(
-                widget.existing == null ? 'Add Birthday' : 'Edit Birthday',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700),
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      birthdayColor.withValues(alpha: 0.25),
+                      birthdayColor.withValues(alpha: 0.1),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: birthdayColor.withValues(alpha: 0.3), width: 1),
+                ),
+                child: const Center(
+                  child: Text('🎂', style: TextStyle(fontSize: 20)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.existing == null ? 'Add Birthday' : 'Edit Birthday',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  Text(
+                    'Fill in the details below',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: onSurface.withValues(alpha: 0.45),
+                        ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -420,84 +499,150 @@ class _BirthdayFormSheetState extends ConsumerState<_BirthdayFormSheet> {
           TextField(
             controller: _nameController,
             onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(
-              labelText: 'Name',
-              hintText: 'E.g.: Alex, Mom, etc.',
-              prefixIcon: Icon(Icons.person_rounded),
+            textCapitalization: TextCapitalization.words,
+            decoration: fieldDecoration(
+              label: 'Name',
+              hint: 'E.g.: Alex, Mom, etc.',
+              prefix:
+                  Icon(Icons.person_rounded, color: birthdayColor, size: 20),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
-          // Date row: Month + Day
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          // Date card
+          Container(
+            decoration: BoxDecoration(
+              color: birthdayColor.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: birthdayColor.withValues(alpha: 0.2)),
+            ),
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Date preview badge
+                Row(
                   children: [
-                    Text('Month',
-                        style: Theme.of(context)
-                            .textTheme
-                            .labelLarge
-                            ?.copyWith(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<int>(
-                      value: _month,
-                      decoration: const InputDecoration(
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    Icon(Icons.calendar_month_rounded,
+                        size: 14, color: birthdayColor),
+                    const SizedBox(width: 5),
+                    Text(
+                      'Birthday Date',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: birthdayColor,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.3,
+                          ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: birthdayColor,
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      items: List.generate(12, (i) {
-                        return DropdownMenuItem(
-                            value: i + 1, child: Text(_monthNames[i]));
-                      }),
-                      onChanged: (v) => setState(() {
-                        _month = v!;
-                        if (_day > _daysInMonth) _day = _daysInMonth;
-                      }),
+                      child: Text(
+                        '${_monthNames[_month - 1].substring(0, 3)} ${_day.clamp(1, _daysInMonth)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 10),
+                Row(
                   children: [
-                    Text('Date',
-                        style: Theme.of(context)
-                            .textTheme
-                            .labelLarge
-                            ?.copyWith(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<int>(
-                      value: _day.clamp(1, _daysInMonth),
-                      decoration: const InputDecoration(
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    Expanded(
+                      flex: 3,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Month',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: onSurface.withValues(alpha: 0.55),
+                                ),
+                          ),
+                          const SizedBox(height: 5),
+                          DropdownButtonFormField<int>(
+                            value: _month,
+                            decoration: dropdownDecoration,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                    fontWeight: FontWeight.w600, fontSize: 13),
+                            items: List.generate(12, (i) {
+                              return DropdownMenuItem(
+                                  value: i + 1, child: Text(_monthNames[i]));
+                            }),
+                            onChanged: (v) => setState(() {
+                              _month = v!;
+                              if (_day > _daysInMonth) _day = _daysInMonth;
+                            }),
+                          ),
+                        ],
                       ),
-                      items: List.generate(_daysInMonth, (i) {
-                        return DropdownMenuItem(
-                            value: i + 1, child: Text('${i + 1}'));
-                      }),
-                      onChanged: (v) => setState(() => _day = v!),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Day',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: onSurface.withValues(alpha: 0.55),
+                                ),
+                          ),
+                          const SizedBox(height: 5),
+                          DropdownButtonFormField<int>(
+                            value: _day.clamp(1, _daysInMonth),
+                            decoration: dropdownDecoration,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                    fontWeight: FontWeight.w600, fontSize: 13),
+                            items: List.generate(_daysInMonth, (i) {
+                              return DropdownMenuItem(
+                                  value: i + 1, child: Text('${i + 1}'));
+                            }),
+                            onChanged: (v) => setState(() => _day = v!),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
           // Type chips
-          Text('Type',
-              style: Theme.of(context)
-                  .textTheme
-                  .labelLarge
-                  ?.copyWith(fontWeight: FontWeight.w700)),
+          Text(
+            'Relationship',
+            style: Theme.of(context)
+                .textTheme
+                .labelLarge
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
+          Row(
             children: BirthdayType.values.map((t) {
               final active = _type == t;
               final label = t == BirthdayType.self
@@ -505,82 +650,141 @@ class _BirthdayFormSheetState extends ConsumerState<_BirthdayFormSheet> {
                   : t == BirthdayType.friend
                       ? '👫 Friend'
                       : '👨‍👩‍👧 Family';
-              return GestureDetector(
-                onTap: () => setState(() => _type = t),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: active
-                        ? birthdayColor
-                        : birthdayColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      color: active ? Colors.white : birthdayColor,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _type = t),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      decoration: BoxDecoration(
+                        color: active
+                            ? birthdayColor
+                            : birthdayColor.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: active
+                              ? birthdayColor
+                              : birthdayColor.withValues(alpha: 0.25),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: active ? Colors.white : birthdayColor,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               );
             }).toList(),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
           // Color picker
-          Text('Color',
-              style: Theme.of(context)
-                  .textTheme
-                  .labelLarge
-                  ?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: BirthdayEntry.paletteColors.map((c) {
-              final isSelected = _color.toARGB32() == c.toARGB32();
-              return GestureDetector(
-                onTap: () => setState(() => _color = c),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: isSelected ? 32 : 28,
-                  height: isSelected ? 32 : 28,
-                  decoration: BoxDecoration(
-                    color: c,
-                    shape: BoxShape.circle,
-                    border: isSelected
-                        ? Border.all(color: Colors.white, width: 2.5)
-                        : null,
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                                color: c.withValues(alpha: 0.5), blurRadius: 6)
-                          ]
+          Row(
+            children: [
+              Text(
+                'Label Color',
+                style: Theme.of(context)
+                    .textTheme
+                    .labelLarge
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const Spacer(),
+              Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: _color,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                        color: _color.withValues(alpha: 0.5), blurRadius: 5)
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.08)),
+            ),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: BirthdayEntry.paletteColors.map((c) {
+                final isSelected = _color.toARGB32() == c.toARGB32();
+                return GestureDetector(
+                  onTap: () => setState(() => _color = c),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: isSelected ? 32 : 27,
+                    height: isSelected ? 32 : 27,
+                    decoration: BoxDecoration(
+                      color: c,
+                      shape: BoxShape.circle,
+                      border: isSelected
+                          ? Border.all(color: Colors.white, width: 2.5)
+                          : null,
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                  color: c.withValues(alpha: 0.55),
+                                  blurRadius: 7)
+                            ]
+                          : null,
+                    ),
+                    child: isSelected
+                        ? const Icon(Icons.check_rounded,
+                            color: Colors.white, size: 14)
                         : null,
                   ),
-                ),
-              );
-            }).toList(),
+                );
+              }).toList(),
+            ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           // Save button
           SizedBox(
             width: double.infinity,
-            height: 48,
+            height: 52,
             child: ElevatedButton.icon(
               onPressed: _nameController.text.trim().isEmpty ? null : _save,
-              icon: const Icon(Icons.check_rounded, size: 18),
-              label: Text(widget.existing == null ? 'Save' : 'Update'),
+              icon: Icon(
+                  widget.existing == null
+                      ? Icons.cake_rounded
+                      : Icons.check_rounded,
+                  size: 18),
+              label: Text(
+                  widget.existing == null ? 'Save Birthday' : 'Update Birthday',
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: birthdayColor,
                 foregroundColor: Colors.white,
+                disabledBackgroundColor: birthdayColor.withValues(alpha: 0.4),
+                disabledForegroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
               ),
             ),
           ),

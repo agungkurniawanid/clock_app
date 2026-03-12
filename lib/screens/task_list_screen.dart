@@ -627,7 +627,8 @@ class _FilterButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final priority = ref.watch(taskPriorityFilterProvider);
     final sortAsc = ref.watch(taskSortAscendingProvider);
-    final hasFilter = priority != null || !sortAsc;
+    final sortField = ref.watch(taskSortFieldProvider);
+    final hasFilter = priority != null || !sortAsc || sortField != 'startDate';
 
     return GestureDetector(
       onTap: () => _showFilterSheet(context, ref),
@@ -720,6 +721,7 @@ class _FilterSheet extends ConsumerStatefulWidget {
 class _FilterSheetState extends ConsumerState<_FilterSheet> {
   late TaskPriority? _selectedPriority;
   late bool _sortAsc;
+  late String _sortField;
   String _selectedMode = 'Any';
   String _selectedRepeat = 'Any';
 
@@ -728,12 +730,14 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
     super.initState();
     _selectedPriority = ref.read(taskPriorityFilterProvider);
     _sortAsc = ref.read(taskSortAscendingProvider);
+    _sortField = ref.read(taskSortFieldProvider);
   }
 
   void _resetFilters() {
     setState(() {
       _selectedPriority = null;
       _sortAsc = true;
+      _sortField = 'startDate';
       _selectedMode = 'Any';
       _selectedRepeat = 'Any';
     });
@@ -742,6 +746,7 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
   void _applyFilters() {
     ref.read(taskPriorityFilterProvider.notifier).state = _selectedPriority;
     ref.read(taskSortAscendingProvider.notifier).state = _sortAsc;
+    ref.read(taskSortFieldProvider.notifier).state = _sortField;
     Navigator.pop(context);
   }
 
@@ -901,23 +906,45 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
   }
 
   Widget _buildDateSortSection() {
+    final isDueDate = _sortField == 'dueDate';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('Sort by Start Date'),
+        _sectionLabel('Sort By'),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
             _dateSortChip(
-              label: 'Oldest First',
+              label: 'Start Date',
+              icon: Icons.play_arrow_rounded,
+              isActive: !isDueDate,
+              onTap: () => setState(() => _sortField = 'startDate'),
+            ),
+            _dateSortChip(
+              label: 'Due Date',
+              icon: Icons.flag_rounded,
+              isActive: isDueDate,
+              onTap: () => setState(() => _sortField = 'dueDate'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _sectionLabel(isDueDate ? 'Due Date Order' : 'Date Order'),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _dateSortChip(
+              label: isDueDate ? 'Sooner First' : 'Oldest First',
               icon: Icons.arrow_upward_rounded,
               isActive: _sortAsc,
               onTap: () => setState(() => _sortAsc = true),
             ),
             _dateSortChip(
-              label: 'Newest First',
+              label: isDueDate ? 'Later First' : 'Newest First',
               icon: Icons.arrow_downward_rounded,
               isActive: !_sortAsc,
               onTap: () => setState(() => _sortAsc = false),

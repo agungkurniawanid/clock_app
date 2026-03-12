@@ -206,7 +206,13 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen>
 
   Widget _buildControls(
       BuildContext context, bool isDark, PomodoroTimerState state) {
-    // Prioritas: alarm berbunyi → tampilkan tombol stop alarm + tombol sesi berikutnya
+    // Prioritas 1: alarm berbunyi saat sesi aktif (auto-start aktif) →
+    //   tampilkan stop alarm + kontrol sesi yang sedang berjalan
+    if (state.isAlarmRinging && state.isActive) {
+      return _buildRunningWithAlarmControls(context, isDark, state);
+    }
+
+    // Prioritas 2: alarm berbunyi saat idle → tampilkan stop alarm + tombol sesi berikutnya
     if (state.isAlarmRinging) {
       return _buildAlarmRingingControls(context, isDark, state);
     }
@@ -373,6 +379,107 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen>
                 color: const Color(0xFFFFB74D),
                 onTap: () =>
                     ref.read(pomodoroProvider.notifier).startLongBreak(),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Kontrol saat alarm berbunyi SETELAH auto-start sesi berikutnya.
+  /// Menampilkan tombol Stop Alarm di atas + tombol Pause/Stop/Skip di bawah.
+  Widget _buildRunningWithAlarmControls(
+      BuildContext context, bool isDark, PomodoroTimerState state) {
+    return Column(
+      children: [
+        // Tombol Stop Alarm yang besar dan mencolok
+        AnimatedBuilder(
+          animation: _pulseController,
+          builder: (context, child) {
+            final scale = 1.0 + _pulseController.value * 0.03;
+            return Transform.scale(
+              scale: scale,
+              child: GestureDetector(
+                onTap: () => ref.read(pomodoroProvider.notifier).stopAlarm(),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF4444), Color(0xFFFF6B6B)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF4444)
+                            .withOpacity(0.4 + _pulseController.value * 0.2),
+                        blurRadius: 20,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.alarm_off,
+                          color: Colors.white, size: 28),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Stop Alarm',
+                        style: GoogleFonts.inter(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        // Kontrol sesi yang sedang berjalan (Pause, Stop, Skip)
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildControlButton(
+                context,
+                isDark,
+                icon: state.state == PomodoroState.paused
+                    ? Icons.play_arrow
+                    : Icons.pause,
+                label: state.state == PomodoroState.paused ? 'Resume' : 'Pause',
+                color: const Color(0xFFFFA502),
+                onTap: () {
+                  if (state.state == PomodoroState.paused) {
+                    ref.read(pomodoroProvider.notifier).resume();
+                  } else {
+                    ref.read(pomodoroProvider.notifier).pause();
+                  }
+                },
+              ),
+              const SizedBox(width: 12),
+              _buildControlButton(
+                context,
+                isDark,
+                icon: Icons.stop,
+                label: 'Stop',
+                color: const Color(0xFFE53935),
+                onTap: () => _showStopConfirmation(context),
+              ),
+              const SizedBox(width: 12),
+              _buildControlButton(
+                context,
+                isDark,
+                icon: Icons.skip_next,
+                label: 'Skip',
+                color: const Color(0xFF7B6EF6),
+                onTap: () => ref.read(pomodoroProvider.notifier).skip(),
               ),
             ],
           ),

@@ -336,13 +336,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           Icons.check_circle_rounded, statusCompleted, 5),
     ];
 
+    final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
+    final childAspectRatio =
+        (1.4 / (textScale > 1.0 ? textScale * 1.15 : 1.0)).clamp(0.8, 1.4);
+
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 12,
       mainAxisSpacing: 12,
-      childAspectRatio: 1.4,
+      childAspectRatio: childAspectRatio,
       children:
           cards.map((c) => _buildSummaryCardWidget(context, c, ref)).toList(),
     );
@@ -395,18 +399,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      card.value,
-                      style: GoogleFonts.nunito(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: card.color,
-                        height: 1,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        card.value,
+                        style: GoogleFonts.nunito(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: card.color,
+                          height: 1,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       card.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context)
                           .textTheme
                           .bodySmall
@@ -416,12 +426,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          'Lihat Lengkap',
-                          style: GoogleFonts.nunito(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: card.color.withValues(alpha: 0.8),
+                        Flexible(
+                          child: Text(
+                            'Lihat Lengkap',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.nunito(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: card.color.withValues(alpha: 0.8),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 2),

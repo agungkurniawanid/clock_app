@@ -57,6 +57,7 @@ Future<T?> showScaleBottomSheet<T>({
     shape: shape,
     isDismissible: isDismissible,
     enableDrag: enableDrag,
+    showDragHandle: false,
     routeSettings: routeSettings,
     builder: (ctx) => _ScaleSheetWrapper(child: builder(ctx)),
   );
