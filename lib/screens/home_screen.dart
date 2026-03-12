@@ -13,6 +13,8 @@ import 'alarm_screen.dart';
 import 'signup_screen.dart';
 import 'pomodoro_screen.dart';
 import 'notification_list_screen.dart';
+import 'habit_screen.dart';
+import 'notes_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -27,12 +29,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Sync triggered tasks once on screen load
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final tasks = ref.read(taskListProvider);
       ref.read(notificationListProvider.notifier).syncTriggeredTasks(tasks);
     });
-    // Refresh every minute: update countdown AND sync new triggered tasks
     _countdownTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) {
         setState(() {});
@@ -66,8 +66,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       body: Column(
         children: [
-          // Header fixed at top — covers the status bar area so content
-          // scrolling up is clipped by the Column layout boundary here.
           _buildHeader(context, isDark),
           Expanded(
             child: CustomScrollView(
@@ -81,11 +79,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         // Clock
                         _buildClockCard(context, isDark),
                         const SizedBox(height: 16),
-                        // Pomodoro Timer Button
-                        _buildPomodoroButton(context, isDark),
+                        // Quick Access Card (Habit + Pomodoro + Notes)
+                        _buildQuickAccessCard(context, isDark),
                         // Summary Grid
                         _buildSummaryGrid(context, summary, ref),
-                        // Alarm Banner — hanya muncul jika ada task dengan alarmMusic
+                        // Alarm Banner
                         _buildAlarmBanner(context, ref, tasks),
                         // Today's Schedule
                         SectionHeader(
@@ -98,7 +96,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   ),
                 ),
-                // Horizontal scroll tasks
                 SliverToBoxAdapter(
                   child: SizedBox(
                     height: 180,
@@ -323,6 +320,193 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  Widget _buildQuickAccessCard(BuildContext context, bool isDark) {
+    final habits = ref.watch(todayHabitsProvider);
+    final today = DateTime.now();
+    final completed = habits.where((h) => h.isCompletedOn(today)).length;
+    final total = habits.length;
+    final pct = total > 0 ? completed / total : 0.0;
+
+    final pomodoroState = ref.watch(pomodoroProvider);
+
+    final notesState = ref.watch(noteProvider);
+    final totalFolders = notesState.folders.length;
+    final totalFiles = notesState.files.length;
+    final overdueCount =
+        notesState.folders.where((f) => f.isReminderOverdue).length +
+            notesState.files.where((f) => f.isReminderOverdue).length;
+
+    final primary = Theme.of(context).colorScheme.primary;
+    final surface = isDark ? const Color(0xFF1E1E2E) : Colors.white;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: primary.withValues(alpha: 0.18),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: primary.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header label
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              children: [
+                Text(
+                  'QUICK ACCESS',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: onSurface.withValues(alpha: 0.38),
+                    letterSpacing: 1.0,
+                  ),
+                ),
+                const Spacer(),
+                if (pomodoroState.isActive)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF6B6B).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFF6B6B),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          pomodoroState.formattedTime,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFFFF6B6B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // 3 tab-style buttons
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Habit Tracker
+                Expanded(
+                  child: _QuickAccessButton(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const HabitScreen()),
+                    ),
+                    icon: Icons.track_changes_rounded,
+                    iconColor: primary,
+                    iconBg: primary.withValues(alpha: 0.12),
+                    label: 'Habits',
+                    sublabel:
+                        total == 0 ? 'No habits' : '$completed/$total done',
+                    isDark: isDark,
+                    onSurface: onSurface,
+                    bottomWidget: total > 0
+                        ? Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: pct,
+                                backgroundColor:
+                                    primary.withValues(alpha: 0.10),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  pct >= 1.0 ? Colors.green : primary,
+                                ),
+                                minHeight: 4,
+                              ),
+                            ),
+                          )
+                        : null,
+                  ),
+                ),
+                // Divider
+                Container(
+                  width: 1,
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  color: onSurface.withValues(alpha: 0.08),
+                ),
+                // Pomodoro
+                Expanded(
+                  child: _QuickAccessButton(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const PomodoroScreen()),
+                    ),
+                    icon: Icons.timer_outlined,
+                    iconColor: const Color(0xFFFF6B6B),
+                    iconBg: const Color(0xFFFF6B6B).withValues(alpha: 0.12),
+                    label: 'Pomodoro',
+                    sublabel: pomodoroState.isActive
+                        ? pomodoroState.stateLabel
+                        : 'Stay focused',
+                    isDark: isDark,
+                    onSurface: onSurface,
+                  ),
+                ),
+                // Divider
+                Container(
+                  width: 1,
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  color: onSurface.withValues(alpha: 0.08),
+                ),
+                // My Notes
+                Expanded(
+                  child: _QuickAccessButton(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const NotesScreen()),
+                    ),
+                    icon: Icons.auto_stories_rounded,
+                    iconColor: const Color(0xFF26C6DA),
+                    iconBg: const Color(0xFF26C6DA).withValues(alpha: 0.12),
+                    label: 'My Notes',
+                    sublabel: totalFolders == 0 && totalFiles == 0
+                        ? 'Empty'
+                        : '$totalFolders folder · $totalFiles note',
+                    badge: overdueCount > 0 ? '$overdueCount' : null,
+                    badgeColor: Colors.red,
+                    isDark: isDark,
+                    onSurface: onSurface,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSummaryGrid(
       BuildContext context, Map<String, int> summary, WidgetRef ref) {
     final cards = [
@@ -343,6 +527,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
+      padding: const EdgeInsets.symmetric(vertical: 6),
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 12,
       mainAxisSpacing: 12,
@@ -460,8 +645,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       BuildContext context, WidgetRef ref, List<TaskModel> tasks) {
     final now = DateTime.now();
 
-    // Hanya tampilkan task yang menggunakan alarmMusic (bukan notificationOnly),
-    // belum selesai, dan waktu alarmnya masih di masa depan.
     final alarmTasks = tasks.where((t) {
       if (t.status == TaskStatus.completed) return false;
       if (t.alarmMode != AlarmMode.alarmMusic) return false;
@@ -470,10 +653,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return alarmDt.isAfter(now);
     }).toList();
 
-    // Jika tidak ada alarm task, hanya beri spacing minimal
     if (alarmTasks.isEmpty) return const SizedBox(height: 20);
 
-    // Urutkan berdasarkan waktu terdekat
     alarmTasks.sort((a, b) {
       final aDt = DateTime(
           a.date.year, a.date.month, a.date.day, a.time.hour, a.time.minute);
@@ -562,86 +743,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ],
     );
   }
-
-  Widget _buildPomodoroButton(BuildContext context, bool isDark) {
-    final pomodoroState = ref.watch(pomodoroProvider);
-
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const PomodoroScreen()),
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFFF6B6B),
-              Color(0xFFFF8E53),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFF6B6B).withOpacity(0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(
-                Icons.timer_outlined,
-                color: Colors.white,
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Pomodoro Timer',
-                    style: GoogleFonts.inter(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    pomodoroState.isActive
-                        ? '${pomodoroState.stateLabel} - ${pomodoroState.formattedTime}'
-                        : 'Stay focused with work sessions',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      color: Colors.white.withOpacity(0.9),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.arrow_forward_ios_rounded,
-              color: Colors.white.withOpacity(0.8),
-              size: 18,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _PulseIndicator extends StatefulWidget {
@@ -700,4 +801,137 @@ class _SummaryCard {
   final int tabIndex;
   const _SummaryCard(
       this.label, this.value, this.icon, this.color, this.tabIndex);
+}
+
+class _QuickAccessButton extends StatelessWidget {
+  final VoidCallback onTap;
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBg;
+  final String label;
+  final String sublabel;
+  final String? badge;
+  final Color? badgeColor;
+  final Widget? bottomWidget;
+  final bool isDark;
+  final Color onSurface;
+
+  const _QuickAccessButton({
+    required this.onTap,
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.label,
+    required this.sublabel,
+    required this.isDark,
+    required this.onSurface,
+    this.badge,
+    this.badgeColor,
+    this.bottomWidget,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        decoration: BoxDecoration(
+          color: iconColor.withValues(alpha: isDark ? 0.06 : 0.04),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icon with optional badge
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: iconBg,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 22),
+                ),
+                if (badge != null)
+                  Positioned(
+                    top: -4,
+                    right: -4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: badgeColor ?? Colors.red,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        badge!,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // Label
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: onSurface,
+              ),
+            ),
+            const SizedBox(height: 2),
+            // Sub label
+            Text(
+              sublabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10,
+                color: onSurface.withValues(alpha: 0.5),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            // Optional bottom widget (e.g. progress bar)
+            if (bottomWidget != null) bottomWidget!,
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Buka',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: iconColor.withValues(alpha: 0.65),
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 8,
+                  color: iconColor.withValues(alpha: 0.65),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

@@ -121,6 +121,20 @@ class NotificationService {
         enableVibration: true,
       ),
     );
+
+    // Notes channel – reminders to revisit note folders / files
+    await ap?.deleteNotificationChannel('notes_channel');
+    await ap?.createNotificationChannel(
+      AndroidNotificationChannel(
+        'notes_channel',
+        'Notes Reminders',
+        description: 'Reminders to revisit your notes',
+        importance: Importance.high,
+        playSound: true,
+        sound: notifSound,
+        enableVibration: true,
+      ),
+    );
   }
 
   /// Recreates notification channels with the current [defaultNotifMusic].
@@ -643,6 +657,56 @@ class NotificationService {
     );
   }
 
+  // ── Notes Reminders ───────────────────────────────────────────────────────
+  /// Schedules a one-time note reminder notification.
+  /// [payload] must be either `'note_folder_<id>'` or `'note_file_<id>'`.
+  static Future<void> scheduleNoteReminder({
+    required String id,
+    required String title,
+    required String body,
+    required DateTime scheduledTime,
+    required String payload,
+  }) async {
+    if (scheduledTime.isBefore(DateTime.now())) return;
+
+    final scheduledTz = tz.TZDateTime.from(scheduledTime, tz.local);
+
+    final androidDetails = AndroidNotificationDetails(
+      'notes_channel',
+      'Notes Reminders',
+      channelDescription: 'Reminders to revisit your notes',
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound(
+          _musicToRawResource(defaultNotifMusic)),
+      enableVibration: vibrationEnabled,
+      icon: '@drawable/ic_notification',
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    await _plugin.zonedSchedule(
+      _noteReminderId(id),
+      title,
+      body,
+      scheduledTz,
+      NotificationDetails(android: androidDetails, iOS: iosDetails),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: payload,
+    );
+  }
+
+  static Future<void> cancelNoteReminder(String id) async {
+    await _plugin.cancel(_noteReminderId(id));
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   /// Converts a music filename like 'mixkit-happy-bells-notification-937.mp3'
@@ -669,6 +733,10 @@ class NotificationService {
   // Subtask notification IDs use offset 1000+ to avoid collision
   static int _subtaskReminderId(String taskId, String subtaskId) =>
       ('${taskId}_subtask_$subtaskId'.hashCode.abs() + 1000) % 2147483647;
+
+  // Notes notification IDs use offset 2000+ to avoid collision
+  static int _noteReminderId(String id) =>
+      ('note_$id'.hashCode.abs() + 2000) % 2147483647;
 
   // Removed _checklistItemReminderId as ChecklistItem doesn't support reminders
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +17,9 @@ import 'screens/settings_screen.dart';
 import 'screens/alarm_screen.dart';
 import 'screens/add_task_screen.dart';
 import 'screens/pomodoro_screen.dart';
+import 'screens/habit_screen.dart';
+import 'screens/notes_screen.dart';
+import 'screens/note_file_editor_screen.dart';
 import 'models/task_model.dart';
 
 /// Global [NavigatorKey] used by [NotificationService] to push AlarmScreen
@@ -153,6 +157,28 @@ class _AppEntryState extends ConsumerState<_AppEntry> {
       if (taskId == 'pomodoro') {
         navigatorKey.currentState?.push(
           MaterialPageRoute(builder: (_) => const PomodoroScreen()),
+        );
+        return;
+      }
+
+      // Notifikasi dari Notes folder
+      if (taskId.startsWith('note_folder_')) {
+        final folderId = taskId.substring('note_folder_'.length);
+        navigatorKey.currentState?.push(
+          MaterialPageRoute(
+            builder: (_) => NotesScreen(openFolderId: folderId),
+          ),
+        );
+        return;
+      }
+
+      // Notifikasi dari Notes file
+      if (taskId.startsWith('note_file_')) {
+        final fileId = taskId.substring('note_file_'.length);
+        navigatorKey.currentState?.push(
+          MaterialPageRoute(
+            builder: (_) => NoteFileEditorScreen(fileId: fileId),
+          ),
         );
         return;
       }
@@ -326,9 +352,15 @@ class _AppEntryState extends ConsumerState<_AppEntry> {
   }
 }
 
-class MainShell extends ConsumerWidget {
+class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
 
+  @override
+  ConsumerState<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends ConsumerState<MainShell>
+    with SingleTickerProviderStateMixin {
   static const _screens = [
     HomeScreen(),
     TaskListScreen(),
@@ -336,8 +368,86 @@ class MainShell extends ConsumerWidget {
     SettingsScreen(),
   ];
 
+  bool _menuOpen = false;
+  late AnimationController _menuCtrl;
+
+  // Staggered animations for 4 menu items (index 0 = Task, nearest to FAB)
+  late List<Animation<double>> _itemAnims;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void initState() {
+    super.initState();
+    _menuCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+
+    _itemAnims = List.generate(4, (i) {
+      // Each item starts animating slightly after the previous
+      final start = i * 0.08;
+      final end = (start + 0.70).clamp(0.0, 1.0);
+      return CurvedAnimation(
+        parent: _menuCtrl,
+        curve: Interval(start, end, curve: Curves.easeOutBack),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _menuCtrl.dispose();
+    super.dispose();
+  }
+
+  void _toggleMenu() {
+    setState(() => _menuOpen = !_menuOpen);
+    if (_menuOpen) {
+      _menuCtrl.forward();
+    } else {
+      _menuCtrl.reverse();
+    }
+  }
+
+  void _closeMenu() {
+    if (!_menuOpen) return;
+    setState(() => _menuOpen = false);
+    _menuCtrl.reverse();
+  }
+
+  void _openTaskForm(BuildContext context) {
+    _closeMenu();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AddTaskScreen()),
+    );
+  }
+
+  void _openHabits(BuildContext context) {
+    _closeMenu();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const HabitScreen()),
+    );
+  }
+
+  void _openPomodoro(BuildContext context) {
+    _closeMenu();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PomodoroScreen()),
+    );
+  }
+
+  void _openNotes(BuildContext context) {
+    _closeMenu();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const NotesScreen()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final navIndex = ref.watch(navIndexProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final overlayStyle = SystemUiOverlayStyle(
@@ -353,13 +463,49 @@ class MainShell extends ConsumerWidget {
     final primary = Theme.of(context).colorScheme.primary;
     final onSurface = Theme.of(context).colorScheme.onSurface;
 
+    // Speed dial items defined here so overlay in body can access them
+    final items = [
+      _SpeedDialItem(
+        label: 'Task',
+        icon: Icons.task_alt_rounded,
+        color: primary,
+        onTap: () => _openTaskForm(context),
+        anim: _itemAnims[0],
+      ),
+      _SpeedDialItem(
+        label: 'Habits',
+        icon: Icons.loop_rounded,
+        color: const Color(0xFF7B6EF6),
+        onTap: () => _openHabits(context),
+        anim: _itemAnims[1],
+      ),
+      _SpeedDialItem(
+        label: 'Pomodoro',
+        icon: Icons.timer_rounded,
+        color: const Color(0xFFFF6B6B),
+        onTap: () => _openPomodoro(context),
+        anim: _itemAnims[2],
+      ),
+      _SpeedDialItem(
+        label: 'Notes',
+        icon: Icons.auto_stories_rounded,
+        color: const Color(0xFF26C6DA),
+        onTap: () => _openNotes(context),
+        anim: _itemAnims[3],
+      ),
+    ];
+
     Widget navItem(
         IconData icon, IconData activeIcon, String label, int index) {
       final active = navIndex == index;
       final color = active ? primary : onSurface.withValues(alpha: 0.5);
-      return Expanded(
+      return SizedBox(
+        width: 72,
         child: InkWell(
-          onTap: () => ref.read(navIndexProvider.notifier).state = index,
+          onTap: () {
+            _closeMenu();
+            ref.read(navIndexProvider.notifier).state = index;
+          },
           splashColor: primary.withValues(alpha: 0.1),
           highlightColor: Colors.transparent,
           child: Column(
@@ -392,68 +538,220 @@ class MainShell extends ConsumerWidget {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: overlayStyle,
       child: Scaffold(
-        body: IndexedStack(
-          index: navIndex,
-          children: _screens,
+        extendBody: true, // content extends behind BottomAppBar for FAB notch
+        body: Stack(
+          children: [
+            IndexedStack(
+              index: navIndex,
+              children: _screens,
+            ),
+            // Dimming overlay when menu is open
+            AnimatedOpacity(
+              opacity: _menuOpen ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: IgnorePointer(
+                ignoring: !_menuOpen,
+                child: GestureDetector(
+                  onTap: _closeMenu,
+                  child: Container(color: Colors.black54),
+                ),
+              ),
+            ),
+            // Speed dial menu items overlay — circular arc around FAB
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: !_menuOpen,
+                child: _buildArcMenu(context, items),
+              ),
+            ),
+          ],
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-        floatingActionButton: Container(
-          width: 64,
-          height: 64,
+        floatingActionButton: _buildFabCircle(context, primary),
+        bottomNavigationBar: DecoratedBox(
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                primary,
-                primary.withValues(alpha: 0.8),
-              ],
-            ),
             boxShadow: [
               BoxShadow(
-                color: primary.withValues(alpha: 0.45),
-                blurRadius: 16,
-                spreadRadius: 2,
-                offset: const Offset(0, 4),
+                color:
+                    Colors.black.withValues(alpha: 0.06), // Sangat transparan
+                blurRadius: 16, // Cukup lebar agar gradasinya lembut
+                spreadRadius: -2, // Minus membuat shadow menyusut/lebih tipis
+                offset: const Offset(0, -3), // Jaraknya didekatkan
               ),
             ],
           ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(32),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AddTaskScreen()),
+          child: BottomAppBar(
+            shape: const CircularNotchedRectangle(),
+            notchMargin: 8,
+            padding: EdgeInsets.zero,
+            elevation: 0,
+            child: SizedBox(
+              height: 62,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  navItem(Icons.home_outlined, Icons.home_rounded, 'Home', 0),
+                  navItem(Icons.event_note_outlined, Icons.event_note_rounded,
+                      'Schedule', 1),
+                  const SizedBox(width: 80),
+                  navItem(Icons.bar_chart_outlined, Icons.bar_chart_rounded,
+                      'Stats', 2),
+                  navItem(Icons.settings_outlined, Icons.settings_rounded,
+                      'Settings', 3),
+                ],
               ),
-              child:
-                  const Icon(Icons.add_rounded, color: Colors.white, size: 34),
-            ),
-          ),
-        ),
-        bottomNavigationBar: BottomAppBar(
-          shape: const CircularNotchedRectangle(),
-          notchMargin: 8,
-          padding: EdgeInsets.zero,
-          elevation: 8,
-          child: SizedBox(
-            height: 62,
-            child: Row(
-              children: [
-                navItem(Icons.home_outlined, Icons.home_rounded, 'Home', 0),
-                navItem(Icons.event_note_outlined, Icons.event_note_rounded,
-                    'Schedule', 1),
-                const SizedBox(width: 80),
-                navItem(Icons.bar_chart_outlined, Icons.bar_chart_rounded,
-                    'Stats', 2),
-                navItem(Icons.settings_outlined, Icons.settings_rounded,
-                    'Settings', 3),
-              ],
             ),
           ),
         ),
       ),
     );
   }
+
+  Widget _buildFabCircle(BuildContext context, Color primary) {
+    return Container(
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            primary,
+            primary.withValues(alpha: 0.8),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: primary.withValues(alpha: 0.55),
+            blurRadius: 16,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(32),
+          onTap: _toggleMenu,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            transitionBuilder: (child, anim) => RotationTransition(
+              turns: anim,
+              child: child,
+            ),
+            child: Icon(
+              _menuOpen ? Icons.close_rounded : Icons.add_rounded,
+              key: ValueKey(_menuOpen),
+              color: Colors.white,
+              size: 34,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildArcMenu(BuildContext context, List<_SpeedDialItem> items) {
+    final size = MediaQuery.of(context).size;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    const navHeight = 62.0;
+    const radius = 110.0;
+    // 4 items in a 120° arc centered on "straight up" from FAB
+    const angleDegrees = [-55.0, -17.0, 17.0, 55.0];
+
+    // FAB center: horizontally centered, at the top edge of BottomAppBar
+    final fabCenterX = size.width / 2;
+    final fabCenterY = size.height - bottomPadding - navHeight;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Stack(
+      children: List.generate(items.length, (i) {
+        final item = items[i];
+        final angleRad = angleDegrees[i] * math.pi / 180;
+        final dx = radius * math.sin(angleRad);
+        final dy = -radius * math.cos(angleRad); // negative = upward in screen
+
+        return Positioned(
+          left: fabCenterX + dx - 24,
+          // offset -24 for icon center + -26 for label+gap above icon
+          top: fabCenterY + dy - 50,
+          child: AnimatedBuilder(
+            animation: item.anim,
+            builder: (ctx, child) {
+              final v = item.anim.value.clamp(0.0, 1.0);
+              return Opacity(
+                opacity: v,
+                child: Transform.scale(scale: 0.6 + 0.4 * v, child: child),
+              );
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Label above icon
+                Material(
+                  color: isDark ? const Color(0xFF2A2A3A) : Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                  elevation: 2,
+                  shadowColor: Colors.black26,
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    child: Text(
+                      item.label,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: item.color,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: item.color.withValues(alpha: 0.4),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(24),
+                      onTap: item.onTap,
+                      child: Icon(item.icon, color: Colors.white, size: 22),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _SpeedDialItem {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  final Animation<double> anim;
+
+  const _SpeedDialItem({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+    required this.anim,
+  });
 }

@@ -8,6 +8,8 @@ import '../models/music_model.dart';
 import '../models/birthday_model.dart';
 import '../models/pomodoro_model.dart';
 import '../models/notification_item.dart';
+import '../models/habit_model.dart';
+import '../models/note_model.dart';
 import '../services/holiday_service.dart';
 import '../services/notification_service.dart';
 import '../services/storage_service.dart';
@@ -1205,3 +1207,201 @@ final notificationListProvider =
 final unreadNotificationCountProvider = Provider<int>((ref) {
   return ref.watch(notificationListProvider).where((n) => !n.isRead).length;
 });
+
+// ─── Habit Providers ──────────────────────────────────────────────────────────
+class HabitNotifier extends StateNotifier<List<HabitModel>> {
+  HabitNotifier() : super([]) {
+    _loadFromStorage();
+  }
+
+  Future<void> _loadFromStorage() async {
+    final saved = await StorageService.loadHabits();
+    state = saved;
+  }
+
+  Future<void> _save() async {
+    await StorageService.saveHabits(state);
+  }
+
+  Future<void> addHabit(HabitModel habit) async {
+    state = [...state, habit];
+    await _save();
+  }
+
+  Future<void> updateHabit(HabitModel habit) async {
+    state = [
+      for (final h in state)
+        if (h.id == habit.id) habit else h,
+    ];
+    await _save();
+  }
+
+  Future<void> deleteHabit(String id) async {
+    state = state.where((h) => h.id != id).toList();
+    await _save();
+  }
+
+  /// Increments completion count for [date] by 1.
+  /// If count already reaches targetCount, resets it to 0.
+  Future<void> toggleCompletion(String id, DateTime date) async {
+    state = [
+      for (final h in state)
+        if (h.id == id)
+          () {
+            final key = HabitModel.dateKey(date);
+            final current = h.completionLog[key] ?? 0;
+            final newCount = current >= h.targetCount ? 0 : current + 1;
+            final newLog = Map<String, int>.from(h.completionLog);
+            if (newCount == 0) {
+              newLog.remove(key);
+            } else {
+              newLog[key] = newCount;
+            }
+            final wasCompleted = current >= h.targetCount;
+            final isNowCompleted = newCount >= h.targetCount;
+            final newHistory = List<String>.from(h.history);
+            if (!wasCompleted && isNowCompleted) {
+              final label = '${date.day}/${date.month}/${date.year}';
+              newHistory.add('Completed on $label');
+            }
+            return h.copyWith(completionLog: newLog, history: newHistory);
+          }()
+        else
+          h,
+    ];
+    await _save();
+  }
+
+  Future<void> archiveHabit(String id) async {
+    state = [
+      for (final h in state)
+        if (h.id == id) h.copyWith(isArchived: true) else h,
+    ];
+    await _save();
+  }
+
+  Future<void> unarchiveHabit(String id) async {
+    state = [
+      for (final h in state)
+        if (h.id == id) h.copyWith(isArchived: false) else h,
+    ];
+    await _save();
+  }
+}
+
+final habitListProvider =
+    StateNotifierProvider<HabitNotifier, List<HabitModel>>(
+        (ref) => HabitNotifier());
+
+/// Active (non-archived) habits that should occur today.
+final todayHabitsProvider = Provider<List<HabitModel>>((ref) {
+  final habits = ref.watch(habitListProvider);
+  final today = DateTime.now();
+  return habits.where((h) => !h.isArchived && h.shouldOccurOn(today)).toList();
+});
+
+// ── Notes ──────────────────────────────────────────────────────────────────
+
+class NotesState {
+  final List<NoteFolder> folders;
+  final List<NoteFile> files;
+
+  const NotesState({this.folders = const [], this.files = const []});
+
+  NotesState copyWith({List<NoteFolder>? folders, List<NoteFile>? files}) =>
+      NotesState(
+        folders: folders ?? this.folders,
+        files: files ?? this.files,
+      );
+}
+
+class NoteNotifier extends StateNotifier<NotesState> {
+  NoteNotifier() : super(const NotesState()) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final folders = await StorageService.loadNoteFolders();
+    final files = await StorageService.loadNoteFiles();
+    state = NotesState(folders: folders, files: files);
+  }
+
+  Future<void> _saveFolders() => StorageService.saveNoteFolders(state.folders);
+  Future<void> _saveFiles() => StorageService.saveNoteFiles(state.files);
+
+  // ── Folders ─────────────────────────────────────────────────────────────
+
+  Future<void> addFolder(NoteFolder folder) async {
+    state = state.copyWith(folders: [...state.folders, folder]);
+    await _saveFolders();
+  }
+
+  Future<void> updateFolder(NoteFolder folder) async {
+    state = state.copyWith(
+      folders:
+          state.folders.map((f) => f.id == folder.id ? folder : f).toList(),
+    );
+    await _saveFolders();
+  }
+
+  Future<void> deleteFolder(String id) async {
+    // Recursively delete child folders first
+    final childIds = state.folders
+        .where((f) => f.parentFolderId == id)
+        .map((f) => f.id)
+        .toList();
+    for (final childId in childIds) {
+      await deleteFolder(childId);
+    }
+    state = state.copyWith(
+      folders: state.folders.where((f) => f.id != id).toList(),
+      files: state.files.where((f) => f.folderId != id).toList(),
+    );
+    await _saveFolders();
+    await _saveFiles();
+  }
+
+  Future<void> markFolderVisited(String id) async {
+    final now = DateTime.now();
+    state = state.copyWith(
+      folders: state.folders
+          .map((f) => f.id == id ? f.copyWith(lastVisitedAt: now) : f)
+          .toList(),
+    );
+    await _saveFolders();
+  }
+
+  // ── Files ────────────────────────────────────────────────────────────────
+
+  Future<void> addFile(NoteFile file) async {
+    state = state.copyWith(files: [...state.files, file]);
+    await _saveFiles();
+  }
+
+  Future<void> updateFile(NoteFile file) async {
+    state = state.copyWith(
+      files: state.files.map((f) => f.id == file.id ? file : f).toList(),
+    );
+    await _saveFiles();
+  }
+
+  Future<void> deleteFile(String id) async {
+    state = state.copyWith(
+      files: state.files.where((f) => f.id != id).toList(),
+    );
+    await _saveFiles();
+  }
+
+  Future<void> markFileVisited(String id) async {
+    final now = DateTime.now();
+    state = state.copyWith(
+      files: state.files
+          .map((f) => f.id == id ? f.copyWith(lastVisitedAt: now) : f)
+          .toList(),
+    );
+    await _saveFiles();
+  }
+}
+
+final noteProvider =
+    StateNotifierProvider<NoteNotifier, NotesState>((ref) => NoteNotifier());

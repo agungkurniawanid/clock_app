@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/task_model.dart';
 import '../models/birthday_model.dart';
+import '../models/habit_model.dart';
+import '../models/note_model.dart';
 import '../models/pomodoro_model.dart';
 import '../models/notification_item.dart';
 
@@ -30,6 +32,9 @@ class StorageService {
   static const _pomodoroSessionsKey = 'pomodoro_sessions';
   static const _notificationsKey = 'in_app_notifications_v1';
   static const _fontScaleIndexKey = 'font_scale_index';
+  static const _habitsKey = 'habits_v1';
+  static const _noteFoldersKey = 'note_folders_v1';
+  static const _noteFilesKey = 'note_files_v1';
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
   static Future<void> saveTasks(List<TaskModel> tasks) async {
@@ -309,6 +314,71 @@ class StorageService {
       return list
           .map((s) =>
               NotificationItem.fromJson(jsonDecode(s) as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ── Habits ─────────────────────────────────────────────────────────────────
+  static Future<void> saveHabits(List<HabitModel> habits) async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = habits.map((h) => jsonEncode(h.toJson())).toList();
+    await prefs.setStringList(_habitsKey, list);
+  }
+
+  static Future<List<HabitModel>> loadHabits() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_habitsKey);
+    if (list == null) return [];
+    try {
+      return list
+          .map(
+              (s) => HabitModel.fromJson(jsonDecode(s) as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ── Notes ─────────────────────────────────────────────────────────────────
+
+  static Future<void> saveNoteFolders(List<NoteFolder> folders) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _noteFoldersKey,
+      folders.map((f) => jsonEncode(f.toJson())).toList(),
+    );
+  }
+
+  static Future<List<NoteFolder>> loadNoteFolders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_noteFoldersKey);
+    if (list == null) return [];
+    try {
+      return list
+          .map((s) => NoteFolder.fromJson(jsonDecode(s) as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> saveNoteFiles(List<NoteFile> files) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _noteFilesKey,
+      files.map((f) => jsonEncode(f.toJson())).toList(),
+    );
+  }
+
+  static Future<List<NoteFile>> loadNoteFiles() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_noteFilesKey);
+    if (list == null) return [];
+    try {
+      return list
+          .map((s) => NoteFile.fromJson(jsonDecode(s) as Map<String, dynamic>))
           .toList();
     } catch (_) {
       return [];

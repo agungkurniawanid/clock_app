@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_providers.dart';
 import '../models/task_model.dart';
 import '../models/pomodoro_model.dart';
+import '../models/habit_model.dart';
 import '../theme/app_colors.dart';
 import '../utils/dialog_utils.dart';
 
@@ -56,7 +57,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen>
     super.initState();
     _selectedYear = _currentYear;
     _selectedMonth = _currentMonth;
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -311,8 +312,11 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen>
             insets: const EdgeInsets.symmetric(horizontal: 16.0),
           ),
           tabs: const [
-            Tab(text: 'Tasks', icon: Icon(Icons.task_alt_rounded, size: 20)),
+            Tab(text: '6Tasks', icon: Icon(Icons.task_alt_rounded, size: 20)),
             Tab(text: 'Pomodoro', icon: Icon(Icons.timer_outlined, size: 20)),
+            Tab(
+                text: 'Habits',
+                icon: Icon(Icons.track_changes_rounded, size: 20)),
           ],
         ),
       ),
@@ -341,6 +345,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen>
           ),
           // Pomodoro Tab
           _buildPomodoroTab(context, isDark, card),
+          // Habits Tab
+          _buildHabitsTab(context, isDark, card),
         ],
       ),
     );
@@ -1485,6 +1491,313 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen>
           ),
         ],
       ),
+    );
+  }
+
+  // ── Habits Stats Tab ────────────────────────────────────────────────────────
+  Widget _buildHabitsTab(BuildContext context, bool isDark, Color card) {
+    final habits = ref.watch(habitListProvider);
+    final active = habits.where((h) => !h.isArchived).toList();
+    final today = DateTime.now();
+    final completedToday = active.where((h) => h.isCompletedOn(today)).length;
+    final completionPct = active.isEmpty ? 0.0 : completedToday / active.length;
+    final bestStreak = active.isEmpty
+        ? 0
+        : active.map((h) => h.longestStreak).reduce((a, b) => a > b ? a : b);
+    final primary = Theme.of(context).colorScheme.primary;
+
+    if (habits.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.track_changes_rounded,
+                size: 72, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            const Text('No habits yet',
+                style: TextStyle(color: Colors.grey, fontSize: 16)),
+            const SizedBox(height: 8),
+            const Text('Create habits to see your tracking stats',
+                style: TextStyle(color: Colors.grey, fontSize: 13)),
+          ],
+        ),
+      );
+    }
+
+    // Last 7 days: count completed vs scheduled habits per day
+    final last7 = List.generate(7, (i) {
+      final d = today.subtract(Duration(days: 6 - i));
+      final scheduled = active.where((h) => h.shouldOccurOn(d)).length;
+      final done =
+          active.where((h) => h.shouldOccurOn(d) && h.isCompletedOn(d)).length;
+      return {'date': d, 'done': done, 'scheduled': scheduled};
+    });
+
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        // Summary row
+        Row(
+          children: [
+            _habitStatCard(context, card, '${(completionPct * 100).round()}%',
+                'Today', Colors.green),
+            const SizedBox(width: 10),
+            _habitStatCard(context, card, '$completedToday/${active.length}',
+                'Done Today', primary),
+            const SizedBox(width: 10),
+            _habitStatCard(
+                context, card, '$bestStreak', 'Best Streak 🔥', Colors.orange),
+          ],
+        ),
+        const SizedBox(height: 24),
+        // 7-day completion bar chart
+        _buildHabit7DayChart(context, card, last7),
+        const SizedBox(height: 24),
+        // Per-habit history cards with 30-day heatmap
+        _buildHabitHistoryList(context, card, active, today),
+        const SizedBox(height: 40),
+      ],
+    );
+  }
+
+  Widget _habitStatCard(BuildContext context, Color card, String value,
+      String label, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: card,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+                color: color.withValues(alpha: 0.12),
+                blurRadius: 10,
+                offset: const Offset(0, 4))
+          ],
+        ),
+        child: Column(children: [
+          Text(value,
+              style: GoogleFonts.nunito(
+                  fontSize: 22, fontWeight: FontWeight.w800, color: color)),
+          const SizedBox(height: 2),
+          Text(label,
+              style:
+                  Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 10),
+              textAlign: TextAlign.center),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildHabit7DayChart(
+      BuildContext context, Color card, List<Map<String, dynamic>> data) {
+    final primary = Theme.of(context).colorScheme.primary;
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration:
+          BoxDecoration(color: card, borderRadius: BorderRadius.circular(20)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.bar_chart_rounded, size: 18, color: primary),
+          const SizedBox(width: 8),
+          Text('7-Day Habit Completion',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+        ]),
+        const SizedBox(height: 16),
+        ...data.map((item) {
+          final d = item['date'] as DateTime;
+          final done = item['done'] as int;
+          final scheduled = item['scheduled'] as int;
+          final pct = scheduled > 0 ? done / scheduled : 0.0;
+          final isToday = DateUtils.isSameDay(d, DateTime.now());
+          final dayIdx = (d.weekday - 1) % 7; // Mon=0..Sun=6
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(children: [
+              SizedBox(
+                width: 34,
+                child: Text(
+                  dayNames[dayIdx],
+                  style: TextStyle(
+                    fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
+                    fontSize: 13,
+                    color: isToday
+                        ? primary
+                        : Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.7),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: pct,
+                    backgroundColor: primary.withValues(alpha: 0.10),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                        pct >= 1.0 ? Colors.green : primary),
+                    minHeight: 14,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 40,
+                child: Text(
+                  scheduled == 0 ? '—' : '$done/$scheduled',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.6)),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+            ]),
+          );
+        }),
+      ]),
+    );
+  }
+
+  Widget _buildHabitHistoryList(BuildContext context, Color card,
+      List<HabitModel> habits, DateTime today) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('All Habits',
+            style: Theme.of(context)
+                .textTheme
+                .titleSmall
+                ?.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 12),
+        ...habits.map((habit) => Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: _buildHabitHistoryCard(context, card, habit, today),
+            )),
+      ],
+    );
+  }
+
+  Widget _buildHabitHistoryCard(
+      BuildContext context, Color card, HabitModel habit, DateTime today) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    // Last 30 days
+    final last30 =
+        List.generate(30, (i) => today.subtract(Duration(days: 29 - i)));
+
+    final scheduled30 = last30.where((d) => habit.shouldOccurOn(d)).length;
+    final done30 = last30
+        .where((d) => habit.shouldOccurOn(d) && habit.isCompletedOn(d))
+        .length;
+    final rate = scheduled30 > 0 ? done30 / scheduled30 : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: card,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 3))
+        ],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+              width: 10,
+              height: 10,
+              decoration:
+                  BoxDecoration(shape: BoxShape.circle, color: habit.colorTag)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              habit.title,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Row(children: [
+            const Icon(Icons.local_fire_department,
+                size: 13, color: Colors.orange),
+            const SizedBox(width: 2),
+            Text('${habit.currentStreak}d',
+                style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.orange)),
+            const SizedBox(width: 8),
+            Text('${(rate * 100).round()}%',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: habit.colorTag)),
+          ]),
+        ]),
+        const SizedBox(height: 10),
+        // 30-day heatmap: 5 rows × 6 cols
+        ...List.generate(5, (row) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 3),
+            child: Row(
+              children: List.generate(6, (col) {
+                final idx = row * 6 + col;
+                if (idx >= 30) return const Expanded(child: SizedBox());
+                final d = last30[idx];
+                final occurs = habit.shouldOccurOn(d);
+                final done = habit.isCompletedOn(d);
+                final cellColor = !occurs
+                    ? onSurface.withValues(alpha: 0.05)
+                    : done
+                        ? habit.colorTag.withValues(alpha: 0.85)
+                        : habit.colorTag.withValues(alpha: 0.15);
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                    child: Container(
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: cellColor,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          );
+        }),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '30-day: $done30/$scheduled30 completed',
+              style: TextStyle(
+                  fontSize: 11, color: onSurface.withValues(alpha: 0.5)),
+            ),
+            Text(
+              'Best: ${habit.longestStreak}d',
+              style: TextStyle(
+                  fontSize: 11, color: onSurface.withValues(alpha: 0.5)),
+            ),
+          ],
+        ),
+      ]),
     );
   }
 }
