@@ -83,7 +83,7 @@ class ExcelService {
     }
 
     final bytes = excel.encode();
-    if (bytes == null) throw Exception('Gagal meng-encode file Excel');
+    if (bytes == null) throw Exception('Failed to encode Excel file');
 
     final dir = await getTemporaryDirectory();
     final timestamp =
@@ -99,7 +99,7 @@ class ExcelService {
               'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ),
       ],
-      subject: 'Smart Alarm – Ekspor Tasks',
+      subject: 'Smart Alarm – Export Tasks',
     );
   }
 
@@ -119,7 +119,7 @@ class ExcelService {
     final fileBytes = result.files.first.bytes;
     if (fileBytes == null) {
       final path = result.files.first.path;
-      if (path == null) throw Exception('Tidak dapat membaca file');
+      if (path == null) throw Exception('Cannot read file');
       final bytes = await File(path).readAsBytes();
       return _parseExcel(bytes);
     }

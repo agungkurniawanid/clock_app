@@ -473,7 +473,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     final allDone = task.totalChecklistItems > 0 &&
         task.completedChecklistItems == task.totalChecklistItems;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final lineColor = primary.withValues(alpha: 0.28);
+    final lineColor = primary;
     final totalItems = task.checklist.length + task.subTasks.length;
     var idx = 0;
 
@@ -501,8 +501,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 Expanded(
                   child: Text(
                     task.autoCompleteOnChecklist
-                        ? 'Semua checklist selesai! Task otomatis Completed.'
-                        : 'Semua checklist & sub-task sudah selesai!',
+                        ? 'All checklists done! Task automatically Completed.'
+                        : 'All checklists & sub-tasks are done!',
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
@@ -655,50 +655,12 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     VoidCallback? onToggle,
     bool isSubLevel = false,
   }) {
-    return InkWell(
-      onTap: onToggle,
-      borderRadius: BorderRadius.circular(6),
-      child: Padding(
-        padding:
-            EdgeInsets.symmetric(vertical: isSubLevel ? 3 : 5, horizontal: 2),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 26,
-              height: 26,
-              child: Checkbox(
-                value: item.isChecked,
-                activeColor: primary,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(4)),
-                onChanged: onToggle != null ? (_) => onToggle() : null,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                item.title,
-                style: TextStyle(
-                  color: item.isChecked
-                      ? textPrimary?.withValues(alpha: 0.4)
-                      : textPrimary,
-                  fontSize: isSubLevel ? 13 : 14,
-                  fontWeight: FontWeight.w400,
-                  decoration:
-                      item.isChecked ? TextDecoration.lineThrough : null,
-                  decorationColor: textPrimary?.withValues(alpha: 0.4),
-                ),
-              ),
-            ),
-            if (item.isChecked) ...[
-              Icon(Icons.check_circle_rounded,
-                  size: 15, color: primary.withValues(alpha: 0.55)),
-              const SizedBox(width: 2),
-            ],
-          ],
-        ),
-      ),
+    return _AnimatedChecklistTile(
+      item: item,
+      textPrimary: textPrimary,
+      primary: primary,
+      onToggle: onToggle,
+      isSubLevel: isSubLevel,
     );
   }
 
@@ -980,7 +942,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       ref.read(taskListProvider.notifier).markComplete(updated.id);
       AppToast.show(
         context,
-        'Semua checklist selesai! Task otomatis Completed.',
+        'All checklists done! Task automatically Completed.',
         type: ToastType.success,
       );
     }
@@ -1191,5 +1153,130 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       'December'
     ];
     return '${days[date.weekday - 1]}, ${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+}
+
+// ── Animated checklist tile ──────────────────────────────────────────────────
+
+class _AnimatedChecklistTile extends StatefulWidget {
+  final ChecklistItem item;
+  final Color? textPrimary;
+  final Color primary;
+  final VoidCallback? onToggle;
+  final bool isSubLevel;
+
+  const _AnimatedChecklistTile({
+    required this.item,
+    required this.textPrimary,
+    required this.primary,
+    this.onToggle,
+    this.isSubLevel = false,
+  });
+
+  @override
+  State<_AnimatedChecklistTile> createState() => _AnimatedChecklistTileState();
+}
+
+class _AnimatedChecklistTileState extends State<_AnimatedChecklistTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scaleAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    );
+    _scaleAnim = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.4), weight: 40),
+      TweenSequenceItem(tween: Tween(begin: 1.4, end: 0.9), weight: 30),
+      TweenSequenceItem(tween: Tween(begin: 0.9, end: 1.0), weight: 30),
+    ]).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _handleToggle() {
+    _ctrl.forward(from: 0);
+    widget.onToggle?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final primary = widget.primary;
+    final textPrimary = widget.textPrimary;
+    final isSubLevel = widget.isSubLevel;
+
+    return InkWell(
+      onTap: _handleToggle,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding:
+            EdgeInsets.symmetric(vertical: isSubLevel ? 3 : 5, horizontal: 2),
+        child: Row(
+          children: [
+            AnimatedBuilder(
+              animation: _scaleAnim,
+              builder: (_, child) =>
+                  Transform.scale(scale: _scaleAnim.value, child: child),
+              child: SizedBox(
+                width: 26,
+                height: 26,
+                child: Checkbox(
+                  value: item.isChecked,
+                  activeColor: primary,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4)),
+                  onChanged:
+                      widget.onToggle != null ? (_) => _handleToggle() : null,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 250),
+                style: TextStyle(
+                  color: item.isChecked
+                      ? textPrimary?.withValues(alpha: 0.4)
+                      : textPrimary,
+                  fontSize: isSubLevel ? 13 : 14,
+                  fontWeight: FontWeight.w400,
+                  decoration:
+                      item.isChecked ? TextDecoration.lineThrough : null,
+                  decorationColor: textPrimary?.withValues(alpha: 0.4),
+                ),
+                child: Text(item.title),
+              ),
+            ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 280),
+              transitionBuilder: (child, anim) => ScaleTransition(
+                scale: anim,
+                child: FadeTransition(opacity: anim, child: child),
+              ),
+              child: item.isChecked
+                  ? Row(
+                      key: const ValueKey('check_icon'),
+                      children: [
+                        Icon(Icons.check_circle_rounded,
+                            size: 15, color: primary.withValues(alpha: 0.7)),
+                        const SizedBox(width: 2),
+                      ],
+                    )
+                  : const SizedBox.shrink(key: ValueKey('empty')),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

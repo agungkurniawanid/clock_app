@@ -7,7 +7,7 @@ import '../data/dummy_data.dart';
 import '../theme/app_colors.dart';
 import '../services/audio_service.dart';
 import '../utils/app_toast.dart';
-import '../widgets/simple_checklist_dialog.dart';
+import '../utils/dialog_utils.dart';
 import 'login_screen.dart';
 
 const _months = [
@@ -57,11 +57,16 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
   List<ChecklistItem> _checklist = [];
   List<SubTask> _subTasks = [];
   final Map<String, TextEditingController> _controllers = {};
+  final Map<String, FocusNode> _focusNodes = {};
   bool _autoCompleteOnChecklist = false;
 
   // ── Get or create a TextEditingController keyed by item ID ────────────────
   TextEditingController _ctrl(String id, [String initial = '']) =>
       _controllers.putIfAbsent(id, () => TextEditingController(text: initial));
+
+  // ── Get or create a FocusNode keyed by item ID ───────────────────────────
+  FocusNode _focusNode(String id) =>
+      _focusNodes.putIfAbsent(id, () => FocusNode());
 
   // ── Unique ID generator ───────────────────────────────────────────────────
   String _uid() => DateTime.now().microsecondsSinceEpoch.toString();
@@ -74,13 +79,15 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
         return;
       } else if (_subTasks[i].subTasks.isNotEmpty) {
         _subTasks[i] = _subTasks[i].copyWith(
-          subTasks: _replaceSubTaskInList(_subTasks[i].subTasks, id, newSubTask),
+          subTasks:
+              _replaceSubTaskInList(_subTasks[i].subTasks, id, newSubTask),
         );
       }
     }
   }
 
-  List<SubTask> _replaceSubTaskInList(List<SubTask> subTasks, String id, SubTask newSubTask) {
+  List<SubTask> _replaceSubTaskInList(
+      List<SubTask> subTasks, String id, SubTask newSubTask) {
     return subTasks.map((st) {
       if (st.id == id) {
         return newSubTask;
@@ -127,13 +134,15 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
         return;
       } else if (_subTasks[i].subTasks.isNotEmpty) {
         _subTasks[i] = _subTasks[i].copyWith(
-          subTasks: _addNestedSubTaskToList(_subTasks[i].subTasks, parentId, newSubTask),
+          subTasks: _addNestedSubTaskToList(
+              _subTasks[i].subTasks, parentId, newSubTask),
         );
       }
     }
   }
 
-  List<SubTask> _addNestedSubTaskToList(List<SubTask> subTasks, String parentId, SubTask newSubTask) {
+  List<SubTask> _addNestedSubTaskToList(
+      List<SubTask> subTasks, String parentId, SubTask newSubTask) {
     return subTasks.map((st) {
       if (st.id == parentId) {
         return st.copyWith(
@@ -265,6 +274,9 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
     for (final c in _controllers.values) {
       c.dispose();
     }
+    for (final fn in _focusNodes.values) {
+      fn.dispose();
+    }
     super.dispose();
   }
 
@@ -281,9 +293,7 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
             ? (widget.editSubTask != null
                 ? 'Edit Sub-task'
                 : 'Add New Sub-task')
-            : (widget.editTask != null
-                ? 'Edit Schedule'
-                : 'Add New Schedule')),
+            : (widget.editTask != null ? 'Edit Schedule' : 'Add New Schedule')),
         leading: IconButton(
           icon: const Icon(Icons.close_rounded),
           onPressed: () => Navigator.pop(context),
@@ -293,7 +303,9 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
         padding: const EdgeInsets.all(20),
         children: [
           // ── Local storage badge (visible only when not logged in) ─────────
-          if (!isLoggedIn && widget.editTask == null && !widget.isSubTaskMode) ...[
+          if (!isLoggedIn &&
+              widget.editTask == null &&
+              !widget.isSubTaskMode) ...[
             _buildLocalStorageBanner(context, isDark),
             const SizedBox(height: 16),
           ],
@@ -341,9 +353,8 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _save,
                   icon: const Icon(Icons.save_rounded, size: 18),
-                  label: Text(widget.isSubTaskMode
-                      ? 'Save Sub-task'
-                      : 'Save Schedule'),
+                  label: Text(
+                      widget.isSubTaskMode ? 'Save Sub-task' : 'Save Schedule'),
                 ),
               ),
             ],
@@ -395,7 +406,7 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
       }
     }
 
-    await showModalBottomSheet(
+    await showScaleBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -612,7 +623,9 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
         description: form.description,
         category: form.category,
         status: () {
-          if (widget.editSubTask != null && form.hasStatus && form.status != null) {
+          if (widget.editSubTask != null &&
+              form.hasStatus &&
+              form.status != null) {
             return form.status!;
           }
           final taskDay =
@@ -831,22 +844,19 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
             id: item.id,
             initialText: item.title,
             hint: 'Checklist item...',
-            onEdit: () async {
-              final result = await showDialog<ChecklistItem>(
-                context: context,
-                builder: (_) => SimpleChecklistDialog(editItem: item),
-              );
-              if (result != null) {
-                setState(() => _checklist[i] = result);
-              }
-            },
+            focusNode: _focusNode(item.id),
             onDelete: () {
               _controllers.remove(item.id);
+              _focusNodes.remove(item.id)?.dispose();
               setState(() => _checklist.removeAt(i));
             },
             onSubmitted: () {
+              final newId = _uid();
               setState(() {
-                _checklist.add(ChecklistItem(id: _uid(), title: ''));
+                _checklist.add(ChecklistItem(id: newId, title: ''));
+              });
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _focusNode(newId).requestFocus();
               });
             },
           );
@@ -854,14 +864,13 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
         Row(
           children: [
             Expanded(
-              child: _addItemBtn(context, 'Add Checklist', () async {
-                final result = await showDialog<ChecklistItem>(
-                  context: context,
-                  builder: (_) => const SimpleChecklistDialog(),
-                );
-                if (result != null) {
-                  setState(() => _checklist.add(result));
-                }
+              child: _addItemBtn(context, 'Add Checklist', () {
+                final newId = _uid();
+                setState(
+                    () => _checklist.add(ChecklistItem(id: newId, title: '')));
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _focusNode(newId).requestFocus();
+                });
               }, primary),
             ),
           ],
@@ -926,22 +935,19 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
             id: item.id,
             initialText: item.title,
             hint: 'Checklist item...',
-            onEdit: () async {
-              final result = await showDialog<ChecklistItem>(
-                context: context,
-                builder: (_) => SimpleChecklistDialog(editItem: item),
-              );
-              if (result != null) {
-                setState(() => _checklist[i] = result);
-              }
-            },
+            focusNode: _focusNode(item.id),
             onDelete: () {
               _controllers.remove(item.id);
+              _focusNodes.remove(item.id)?.dispose();
               setState(() => _checklist.removeAt(i));
             },
             onSubmitted: () {
+              final newId = _uid();
               setState(() {
-                _checklist.add(ChecklistItem(id: _uid(), title: ''));
+                _checklist.add(ChecklistItem(id: newId, title: ''));
+              });
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _focusNode(newId).requestFocus();
               });
             },
           );
@@ -949,14 +955,13 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
         Row(
           children: [
             Expanded(
-              child: _addItemBtn(context, 'Add Checklist', () async {
-                final result = await showDialog<ChecklistItem>(
-                  context: context,
-                  builder: (_) => const SimpleChecklistDialog(),
-                );
-                if (result != null) {
-                  setState(() => _checklist.add(result));
-                }
+              child: _addItemBtn(context, 'Add Checklist', () {
+                final newId = _uid();
+                setState(
+                    () => _checklist.add(ChecklistItem(id: newId, title: '')));
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _focusNode(newId).requestFocus();
+                });
               }, primary),
             ),
           ],
@@ -1131,7 +1136,8 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
                     final result = await Navigator.push<SubTask>(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const AddTaskScreen(isSubTaskMode: true),
+                        builder: (_) =>
+                            const AddTaskScreen(isSubTaskMode: true),
                       ),
                     );
                     if (result != null) {
@@ -1269,52 +1275,80 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
     required String hint,
     required VoidCallback onDelete,
     VoidCallback? onSubmitted,
-    VoidCallback? onEdit,
     bool compact = false,
+    FocusNode? focusNode,
   }) {
+    final primary = Theme.of(context).colorScheme.primary;
     final textSecondary = Theme.of(context).textTheme.bodyMedium?.color;
     return Padding(
       padding: EdgeInsets.only(bottom: compact ? 6 : 8),
-      child: Row(
-        children: [
-          Icon(Icons.radio_button_unchecked_rounded,
-              size: compact ? 18 : 22, color: textSecondary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: _ctrl(id, initialText),
-              textInputAction: TextInputAction.next,
-              onSubmitted: onSubmitted != null ? (_) => onSubmitted() : null,
-              decoration: InputDecoration(
-                hintText: hint,
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(
-                    vertical: compact ? 10 : 12, horizontal: 4),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.05)
+              : primary.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: primary.withValues(alpha: 0.22),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: 14),
+            Container(
+              width: compact ? 7 : 8,
+              height: compact ? 7 : 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: primary.withValues(alpha: 0.55),
               ),
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(fontSize: compact ? 14 : 16),
             ),
-          ),
-          const SizedBox(width: 4),
-          if (onEdit != null) ...[
-            GestureDetector(
-              onTap: onEdit,
-              child: Icon(Icons.edit_outlined,
-                  size: compact ? 18 : 22,
-                  color: textSecondary?.withAlpha((0.7 * 255).toInt())),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                controller: _ctrl(id, initialText),
+                focusNode: focusNode,
+                textInputAction: TextInputAction.next,
+                onSubmitted: onSubmitted != null ? (_) => onSubmitted() : null,
+                decoration: InputDecoration(
+                  hintText: hint,
+                  hintStyle: TextStyle(
+                    color: textSecondary?.withValues(alpha: 0.45),
+                    fontSize: compact ? 14 : 15,
+                  ),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(
+                    vertical: compact ? 11 : 13,
+                  ),
+                ),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontSize: compact ? 14 : 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
             ),
-            const SizedBox(width: 8),
+            InkWell(
+              onTap: onDelete,
+              borderRadius: const BorderRadius.only(
+                topRight: Radius.circular(12),
+                bottomRight: Radius.circular(12),
+              ),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 10 : 12,
+                  vertical: compact ? 11 : 13,
+                ),
+                child: Icon(
+                  Icons.close_rounded,
+                  size: compact ? 16 : 18,
+                  color: Colors.red.withValues(alpha: 0.55),
+                ),
+              ),
+            ),
           ],
-          GestureDetector(
-            onTap: onDelete,
-            child: Icon(Icons.close_rounded,
-                size: compact ? 18 : 22,
-                color: Colors.red.withValues(alpha: 0.6)),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -2671,7 +2705,7 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
     void Function(String) onAdd,
     List<String> current,
   ) {
-    showModalBottomSheet(
+    showScaleBottomSheet(
       context: context,
       builder: (ctx) => Padding(
         padding: EdgeInsets.fromLTRB(

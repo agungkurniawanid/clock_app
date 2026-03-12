@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../utils/dialog_utils.dart';
 import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -27,19 +28,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final primary = Theme.of(context).colorScheme.primary;
 
-    showDialog(
+    showScaleDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         icon: Icon(Icons.construction_rounded, color: primary, size: 40),
         title: const Text(
-          'Fitur Dalam Pengembangan',
+          'Feature in Development',
           textAlign: TextAlign.center,
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
         ),
         content: const Text(
-          'Fitur sinkronisasi dengan database masih dalam tahap proses pengembangan. '
-          'Saat ini data akun hanya tersimpan secara lokal di perangkat Anda.',
+          'The database sync feature is still under development. '
+          'Account data is currently stored locally on your device only.',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 14, height: 1.5),
         ),
@@ -57,7 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
             ),
-            child: const Text('Mengerti',
+            child: const Text('Got it',
                 style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
@@ -105,7 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  'Masuk ke Akun',
+                  'Sign In',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w800,
@@ -113,7 +114,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Task tersimpan di akun Anda akan dimuat kembali.',
+                  'Your saved tasks will be loaded back from your account.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: isDark ? darkTextSecondary : lightTextSecondary,
@@ -141,10 +142,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) {
-                            return 'Email tidak boleh kosong';
+                            return 'Email is required';
                           }
                           if (!v.contains('@')) {
-                            return 'Format email tidak valid';
+                            return 'Invalid email format';
                           }
                           return null;
                         },
@@ -173,7 +174,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         validator: (v) {
                           if (v == null || v.isEmpty) {
-                            return 'Password tidak boleh kosong';
+                            return 'Password is required';
                           }
                           return null;
                         },
@@ -189,7 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 horizontal: 4, vertical: 8),
                           ),
                           child: Text(
-                            'Lupa password?',
+                            'Forgot password?',
                             style: TextStyle(
                                 fontSize: 13,
                                 color: primary,
@@ -214,7 +215,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           borderRadius: BorderRadius.circular(16)),
                     ),
                     child: const Text(
-                      'Masuk',
+                      'Sign In',
                       style:
                           TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                     ),
@@ -229,7 +230,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Text(
-                        'atau',
+                        'or',
                         style: TextStyle(
                           fontSize: 13,
                           color:
@@ -254,7 +255,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Belum punya akun?',
+                        "Don't have an account?",
                         style: Theme.of(context)
                             .textTheme
                             .bodyMedium
@@ -274,7 +275,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         child: Text(
-                          'Daftar',
+                          'Register',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,

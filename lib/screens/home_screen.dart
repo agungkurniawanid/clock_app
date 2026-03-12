@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_providers.dart';
-import '../services/storage_service.dart';
 import '../widgets/clock_widget.dart';
 import '../widgets/section_header.dart';
 import '../widgets/task_card.dart';
@@ -232,26 +231,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  IconButton(
-                    onPressed: () => Navigator.push(
+                  GestureDetector(
+                    onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
                           builder: (_) => const NotificationListScreen()),
                     ),
-                    icon: Builder(builder: (context) {
-                      final unread = ref.watch(unreadNotificationCountProvider);
-                      return Icon(
-                        unread > 0
-                            ? Icons.notifications_rounded
-                            : Icons.notifications_none_rounded,
-                        color: Theme.of(context).textTheme.bodyLarge?.color,
-                        size: 26,
-                      );
-                    }),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      alignment: Alignment.center,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFE8F0FE),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.notifications_rounded,
+                        color: darkPrimary,
+                        size: 24,
+                      ),
+                    ),
                   ),
                   Positioned(
-                    top: 6,
-                    right: 6,
+                    top: 0,
+                    right: 0,
                     child: Builder(builder: (context) {
                       final unread = ref.watch(unreadNotificationCountProvider);
                       if (unread == 0) return const SizedBox.shrink();
@@ -278,6 +281,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ],
               ),
+              const SizedBox(width: 8),
               GestureDetector(
                 onTap: () => Navigator.push(
                   context,

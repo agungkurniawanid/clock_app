@@ -7,6 +7,7 @@ import '../services/notification_service.dart';
 import '../services/excel_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/app_toast.dart';
+import '../utils/dialog_utils.dart';
 import '../data/dummy_data.dart';
 import 'birthday_screen.dart';
 import 'music_screen.dart';
@@ -125,7 +126,7 @@ class SettingsScreen extends ConsumerWidget {
                           color: Theme.of(context).textTheme.bodyLarge?.color),
                       const SizedBox(width: 12),
                       Text(
-                        'Ukuran Teks',
+                        'Text Size',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             fontWeight: FontWeight.w500, fontSize: 14),
                       ),
@@ -136,7 +137,7 @@ class SettingsScreen extends ConsumerWidget {
                     children: [
                       const SizedBox(width: 32),
                       ...List.generate(4, (i) {
-                        const labels = ['Kecil', 'Normal', 'Besar', 'XL'];
+                        const labels = ['Small', 'Normal', 'Large', 'XL'];
                         const scales = [0.85, 1.0, 1.15, 1.3];
                         final selected = i == fontScaleIndex;
                         final primary = Theme.of(context).colorScheme.primary;
@@ -333,6 +334,7 @@ class SettingsScreen extends ConsumerWidget {
                 ref.read(defaultNotifMusicProvider.notifier).state = fileToSave;
                 NotificationService.defaultNotifMusic = fileToSave;
                 await StorageService.saveDefaultNotifMusic(fileToSave);
+                await NotificationService.recreateNotifChannels();
               },
               borderRadius: BorderRadius.circular(10),
               child: Padding(
@@ -474,12 +476,12 @@ class SettingsScreen extends ConsumerWidget {
           _buildCard(context, card, [
             _settingRowNav(context,
                 icon: Icons.file_download_rounded,
-                label: 'Export Tasks ke Excel',
+                label: 'Export Tasks to Excel',
                 onTap: () => _exportTasks(context, ref)),
             _divider(context),
             _settingRowNav(context,
                 icon: Icons.file_upload_rounded,
-                label: 'Import Tasks dari Excel',
+                label: 'Import Tasks from Excel',
                 onTap: () => _showImportDialog(context, ref)),
             _divider(context),
             _settingRowNav(context,
@@ -543,13 +545,13 @@ class SettingsScreen extends ConsumerWidget {
           Expanded(
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Profil & Sinkronisasi',
+              Text('Profile & Sync',
                   style: Theme.of(context)
                       .textTheme
                       .titleMedium
                       ?.copyWith(fontWeight: FontWeight.w700)),
               const SizedBox(height: 3),
-              Text('Fitur ini sedang dalam pengembangan',
+              Text('This feature is under development',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         fontSize: 12,
                         color: isDark ? darkTextSecondary : lightTextSecondary,
@@ -563,9 +565,9 @@ class SettingsScreen extends ConsumerWidget {
           height: 44,
           child: ElevatedButton.icon(
             onPressed: () => AppToast.show(
-                context, 'Fitur auth & sinkronisasi sedang dalam pengembangan'),
+                context, 'Auth & sync feature is under development'),
             icon: const Icon(Icons.construction_rounded, size: 18),
-            label: const Text('Segera Hadir',
+            label: const Text('Coming Soon',
                 style: TextStyle(fontWeight: FontWeight.w700)),
             style: ElevatedButton.styleFrom(
               backgroundColor: primary.withValues(alpha: 0.5),
@@ -667,15 +669,15 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   void _showClearDialog(BuildContext context, WidgetRef ref) {
-    showDialog(
+    showScaleDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Clear All Tasks'),
         content: const Text(
-            'Hapus semua task dari perangkat ini? Custom music dan data ulang tahun tidak akan terpengaruh. Tindakan ini tidak dapat dibatalkan.'),
+            'Delete all tasks from this device? Custom music and birthday data will not be affected. This action cannot be undone.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
@@ -685,14 +687,14 @@ class SettingsScreen extends ConsumerWidget {
               if (context.mounted) {
                 AppToast.show(
                   context,
-                  'Semua task berhasil dihapus.',
+                  'All tasks have been deleted.',
                   type: ToastType.warning,
                 );
               }
             },
             style: ElevatedButton.styleFrom(
                 backgroundColor: statusOverdue, foregroundColor: Colors.white),
-            child: const Text('Hapus Semua'),
+            child: const Text('Delete All'),
           ),
         ],
       ),
@@ -702,40 +704,39 @@ class SettingsScreen extends ConsumerWidget {
   Future<void> _exportTasks(BuildContext context, WidgetRef ref) async {
     final tasks = ref.read(taskListProvider);
     if (tasks.isEmpty) {
-      AppToast.show(context, 'Tidak ada task untuk diekspor.',
-          type: ToastType.warning);
+      AppToast.show(context, 'No tasks to export.', type: ToastType.warning);
       return;
     }
     try {
       await ExcelService.exportTasks(tasks);
     } catch (e) {
       if (context.mounted) {
-        AppToast.show(context, 'Ekspor gagal: $e', type: ToastType.error);
+        AppToast.show(context, 'Export failed: $e', type: ToastType.error);
       }
     }
   }
 
   void _showImportDialog(BuildContext context, WidgetRef ref) {
-    showDialog(
+    showScaleDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Import Tasks dari Excel'),
+        title: const Text('Import Tasks from Excel'),
         content: const Text(
-          'Pilih mode import:\n\n'
-          '• Gabungkan – menambahkan task baru dari file tanpa menghapus task yang sudah ada.\n\n'
-          '• Ganti Semua – menghapus semua task yang ada lalu menggantinya dengan data dari file.',
+          'Select import mode:\n\n'
+          '• Merge – adds new tasks from the file without deleting existing tasks.\n\n'
+          '• Replace All – deletes all existing tasks and replaces them with data from the file.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
               _runImport(context, ref, replace: false);
             },
-            child: const Text('Gabungkan'),
+            child: const Text('Merge'),
           ),
           ElevatedButton(
             onPressed: () {
@@ -744,7 +745,7 @@ class SettingsScreen extends ConsumerWidget {
             },
             style: ElevatedButton.styleFrom(
                 backgroundColor: statusOverdue, foregroundColor: Colors.white),
-            child: const Text('Ganti Semua'),
+            child: const Text('Replace All'),
           ),
         ],
       ),
@@ -758,7 +759,7 @@ class SettingsScreen extends ConsumerWidget {
       if (tasks == null) return; // user cancelled
       if (tasks.isEmpty) {
         if (context.mounted) {
-          AppToast.show(context, 'Tidak ada data task di file tersebut.',
+          AppToast.show(context, 'No task data found in the file.',
               type: ToastType.warning);
         }
         return;
@@ -770,20 +771,20 @@ class SettingsScreen extends ConsumerWidget {
         AppToast.show(
           context,
           replace
-              ? '$count task berhasil diimpor (semua data lama diganti).'
-              : '$count task baru berhasil ditambahkan.',
+              ? '$count tasks imported successfully (all old data replaced).'
+              : '$count new tasks added successfully.',
           type: ToastType.success,
         );
       }
     } catch (e) {
       if (context.mounted) {
-        AppToast.show(context, 'Import gagal: $e', type: ToastType.error);
+        AppToast.show(context, 'Import failed: $e', type: ToastType.error);
       }
     }
   }
 
   void _showPrivacyPolicyDialog(BuildContext context, bool isDark, Color card) {
-    showDialog(
+    showScaleDialog(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: card,
@@ -830,77 +831,70 @@ class SettingsScreen extends ConsumerWidget {
                     children: [
                       _privacySection(
                           ctx,
-                          'Kebijakan Privasi',
-                          'Tanggal berlaku: 1 Januari 2025\n\n'
-                              'Smart Alarm & Task Scheduler ("Aplikasi") dikembangkan '
-                              'oleh Agung Kurniawan sebagai aplikasi freeware. Layanan '
-                              'ini disediakan tanpa biaya dan dimaksudkan untuk '
-                              'digunakan apa adanya.\n\n'
-                              'Kebijakan Privasi ini menjelaskan kebijakan kami '
-                              'mengenai pengumpulan, penggunaan, dan pengungkapan '
-                              'informasi pribadi apabila Anda menggunakan Aplikasi ini.'),
+                          'Privacy Policy',
+                          'Effective date: January 1, 2025\n\n'
+                              'Smart Alarm & Task Scheduler ("App") is developed '
+                              'by Agung Kurniawan as a freeware application. This '
+                              'service is provided at no cost and is intended to be '
+                              'used as is.\n\n'
+                              'This Privacy Policy explains our policies regarding '
+                              'the collection, use, and disclosure of personal '
+                              'information when you use this App.'),
                       _privacySection(
                           ctx,
-                          '1. Pengumpulan dan Penggunaan Data',
-                          'Aplikasi ini tidak mengumpulkan data pribadi apa pun ke '
-                              'server eksternal. Semua data yang Anda masukkan — '
-                              'termasuk nama task, jadwal, pengingat, dan preferensi '
-                              'pengaturan — disimpan secara lokal di perangkat Anda '
-                              'menggunakan mekanisme penyimpanan bawaan Android '
-                              '(SharedPreferences). Data tersebut tidak pernah '
-                              'dikirim, dibagikan, atau dijual kepada pihak ketiga.'),
+                          '1. Data Collection and Use',
+                          'This App does not collect any personal data to external '
+                              'servers. All data you enter — including task names, '
+                              'schedules, reminders, and settings preferences — is '
+                              'stored locally on your device using Android\'s built-in '
+                              'storage mechanism (SharedPreferences). This data is '
+                              'never transmitted, shared, or sold to third parties.'),
                       _privacySection(
                           ctx,
-                          '2. Izin yang Digunakan',
-                          '• Notifikasi — digunakan untuk menampilkan pengingat dan '
-                              'alarm task pada waktu yang dijadwalkan.\n'
-                              '• Alarm Tepat Waktu (SCHEDULE_EXACT_ALARM) — '
-                              'digunakan agar alarm dapat berbunyi tepat pada waktu '
-                              'yang ditentukan pengguna.\n'
-                              '• Full Screen Intent — digunakan agar layar alarm '
-                              'dapat tampil bahkan saat layar perangkat terkunci.\n'
-                              '• Vibration — digunakan untuk getaran saat notifikasi '
-                              'atau alarm berlangsung.\n'
-                              '• Penyimpanan (READ_EXTERNAL_STORAGE, opsional) — '
-                              'digunakan hanya jika pengguna memilih file musik dari '
-                              'perangkat.'),
+                          '2. Permissions Used',
+                          '• Notifications — used to display reminders and task '
+                              'alarms at the scheduled time.\n'
+                              '• Exact Alarm (SCHEDULE_EXACT_ALARM) — '
+                              'used so that alarms can ring at the exact time set by the user.\n'
+                              '• Full Screen Intent — used so that the alarm screen '
+                              'can appear even when the device screen is locked.\n'
+                              '• Vibration — used for vibration during notifications '
+                              'or alarms.\n'
+                              '• Storage (READ_EXTERNAL_STORAGE, optional) — '
+                              'used only if the user selects a music file from the device.'),
                       _privacySection(
                           ctx,
-                          '3. Layanan Pihak Ketiga',
-                          'Aplikasi ini tidak terintegrasi dengan layanan analitik, '
-                              'iklan, atau pelacakan pihak ketiga apa pun. '
-                              'Tidak ada SDK pemasaran yang disertakan di dalam '
-                              'Aplikasi ini.'),
+                          '3. Third-Party Services',
+                          'This App does not integrate with any analytics, '
+                              'advertising, or third-party tracking services. '
+                              'No marketing SDK is included in this App.'),
                       _privacySection(
                           ctx,
-                          '4. Keamanan Data',
-                          'Kami berkomitmen untuk melindungi informasi Anda. '
-                              'Semua data disimpan secara lokal di perangkat Anda '
-                              'dan tidak dapat diakses oleh pihak lain tanpa akses '
-                              'fisik ke perangkat tersebut. Kami menyarankan Anda '
-                              'untuk mengaktifkan kunci layar perangkat guna '
-                              'menambah lapisan keamanan.'),
+                          '4. Data Security',
+                          'We are committed to protecting your information. '
+                              'All data is stored locally on your device '
+                              'and cannot be accessed by others without physical '
+                              'access to the device. We recommend enabling a screen '
+                              'lock on your device for an additional layer of security.'),
                       _privacySection(
                           ctx,
-                          '5. Hak Pengguna',
-                          'Anda memiliki kendali penuh atas semua data di dalam '
-                              'Aplikasi ini. Anda dapat menghapus seluruh data task '
-                              'melalui menu Settings → Data & Backup → Clear All Tasks, '
-                              'atau menghapus instalasi Aplikasi untuk menghapus '
-                              'seluruh data secara permanen.'),
+                          '5. User Rights',
+                          'You have full control over all data in this App. '
+                              'You can delete all task data through Settings → '
+                              'Data & Backup → Clear All Tasks, '
+                              'or uninstall the App to permanently delete all data.'),
                       _privacySection(
                           ctx,
-                          '6. Perubahan Kebijakan',
-                          'Kami dapat memperbarui Kebijakan Privasi ini dari waktu '
-                              'ke waktu. Perubahan akan diinformasikan melalui '
-                              'pembaruan aplikasi. Penggunaan Aplikasi secara '
-                              'berkelanjutan setelah adanya perubahan berarti '
-                              'Anda menyetujui kebijakan yang diperbarui tersebut.'),
+                          '6. Policy Changes',
+                          'We may update this Privacy Policy from time to time. '
+                              'Changes will be communicated through app updates. '
+                              'Continued use of the App after any changes means '
+                              'you accept the updated policy.'),
                       _privacySection(
                           ctx,
-                          '7. Hubungi Kami',
-                          'Jika Anda memiliki pertanyaan mengenai Kebijakan Privasi '
-                              'ini, silakan hubungi kami:\n\n'
+                          '7. Contact Us',
+                          'If you have any questions about this Privacy Policy, '
+                              'please contact us:\n\n'
                               'Email: agungklewang26@gmail.com\n'
                               'WhatsApp: +62 813-3164-0909'),
                     ],
@@ -915,7 +909,7 @@ class SettingsScreen extends ConsumerWidget {
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () => Navigator.pop(ctx),
-                    child: const Text('Saya Mengerti'),
+                    child: const Text('I Understand'),
                   ),
                 ),
               ),
@@ -947,12 +941,12 @@ class SettingsScreen extends ConsumerWidget {
 
   void _rateApp() {
     const phone = '6281331640909';
-    const message = 'Halo Kak Agung! 👋\n\n'
-        'Saya ingin memberikan rating untuk aplikasi:\n'
+    const message = 'Hi Kak Agung! 👋\n\n'
+        'I want to rate the app:\n'
         '📱 *Smart Alarm & Task Scheduler*\n\n'
-        'Rating saya: ⭐⭐⭐⭐⭐\n\n'
-        'Komentar: [Tulis komentar Anda di sini...]\n\n'
-        'Terima kasih sudah membuat aplikasi yang keren! 🙌';
+        'My rating: ⭐⭐⭐⭐⭐\n\n'
+        'Comment: [Write your comment here...]\n\n'
+        'Thank you for making such a great app! 🙌';
     final encoded = Uri.encodeComponent(message);
     launchUrl(
       Uri.parse('https://wa.me/$phone?text=$encoded'),
@@ -962,7 +956,7 @@ class SettingsScreen extends ConsumerWidget {
 
   void _showDeveloperModal(BuildContext context, bool isDark, Color card) {
     final primary = Theme.of(context).colorScheme.primary;
-    showModalBottomSheet(
+    showScaleBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -1013,12 +1007,12 @@ class SettingsScreen extends ConsumerWidget {
                 label: 'WhatsApp',
                 value: '081331640909', onTap: () {
               const phone = '6281331640909';
-              const message = 'Halo Kak Agung! 👋\n\n'
-                  'Saya pengguna aplikasi:\n'
+              const message = 'Hi Kak Agung! 👋\n\n'
+                  'I am a user of:\n'
                   '📱 *Smart Alarm & Task Scheduler*\n\n'
-                  'Saya ingin menghubungi Anda terkait:\n'
-                  '[Tulis pesan Anda di sini...]\n\n'
-                  'Terima kasih! 🙌';
+                  'I would like to contact you regarding:\n'
+                  '[Write your message here...]\n\n'
+                  'Thank you! 🙌';
               final encoded = Uri.encodeComponent(message);
               launchUrl(
                 Uri.parse('https://wa.me/$phone?text=$encoded'),
@@ -1167,7 +1161,7 @@ class _BirthdayNavCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Ulang Tahun',
+                    'Birthdays',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w800,
                           fontSize: 15,
@@ -1177,8 +1171,8 @@ class _BirthdayNavCard extends ConsumerWidget {
                   const SizedBox(height: 4),
                   Text(
                     count == 0
-                        ? 'Belum ada data ulang tahun'
-                        : '$count ulang tahun ditambahkan',
+                        ? 'No birthday data yet'
+                        : '$count birthday(s) added',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontSize: 12,
                           color: Theme.of(context)
@@ -1199,7 +1193,7 @@ class _BirthdayNavCard extends ConsumerWidget {
                             color: birthdayColor.withValues(alpha: 0.3)),
                       ),
                       child: const Text(
-                        'Tambah sekarang +',
+                        'Add now +',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,

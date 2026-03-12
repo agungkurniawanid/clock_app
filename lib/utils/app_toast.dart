@@ -112,7 +112,7 @@ class _ToastWidgetState extends State<_ToastWidget>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final (bgColor, borderColor, iconData, iconColor, textColor) =
+    final (bgColor, borderColor, _, iconColor, textColor) =
         switch (widget.type) {
       ToastType.success => (
           isDark ? const Color(0xFF0D2E1A) : const Color(0xFFEBF7F0),
@@ -173,7 +173,19 @@ class _ToastWidgetState extends State<_ToastWidget>
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Icon(iconData, color: iconColor, size: 22),
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE8F0FE),
+                      shape: BoxShape.circle,
+                    ),
+                    padding: const EdgeInsets.all(6),
+                    child: Image.asset(
+                      'assets/icon-launcher-2-transparent.png',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(

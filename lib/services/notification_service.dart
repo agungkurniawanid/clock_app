@@ -34,7 +34,7 @@ class NotificationService {
 
     tz.initializeTimeZones();
 
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const android = AndroidInitializationSettings('@drawable/ic_notification');
     const ios = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -62,6 +62,9 @@ class NotificationService {
     await ap?.deleteNotificationChannel('alarm_channel');
     await ap?.deleteNotificationChannel('reminder_channel');
 
+    final notifSound = RawResourceAndroidNotificationSound(
+        _musicToRawResource(defaultNotifMusic));
+
     // Alarm channel – highest priority, full screen intent, uses alarm tone
     // from res/raw so the notification itself sounds even before AlarmScreen opens.
     await ap?.createNotificationChannel(
@@ -78,48 +81,54 @@ class NotificationService {
       ),
     );
 
-    // Reminder channel – high but no full-screen
+    // Reminder channel – high but no full-screen, uses default notification sound
     await ap?.createNotificationChannel(
-      const AndroidNotificationChannel(
+      AndroidNotificationChannel(
         'reminder_channel',
         'Task Reminders',
         description: 'Reminder alerts before task start time',
         importance: Importance.high,
         playSound: true,
-        sound: RawResourceAndroidNotificationSound(
-            'mixkit_happy_bells_notification_937'),
+        sound: notifSound,
         enableVibration: true,
       ),
     );
 
-    // Birthday channel – high importance, festive notification sound
+    // Birthday channel – high importance, uses default notification sound
     await ap?.deleteNotificationChannel('birthday_channel');
     await ap?.createNotificationChannel(
-      const AndroidNotificationChannel(
+      AndroidNotificationChannel(
         'birthday_channel',
         'Birthday Reminders',
-        description: 'Pengingat ulang tahun',
+        description: 'Birthday reminders',
         importance: Importance.high,
         playSound: true,
-        sound: RawResourceAndroidNotificationSound(
-            'mixkit_happy_bells_notification_937'),
+        sound: notifSound,
         enableVibration: true,
       ),
     );
 
-    // Pomodoro channel – high importance, notification sound
+    // Pomodoro channel – high importance, uses default notification sound
     await ap?.deleteNotificationChannel('pomodoro_channel');
     await ap?.createNotificationChannel(
-      const AndroidNotificationChannel(
+      AndroidNotificationChannel(
         'pomodoro_channel',
         'Pomodoro Timer',
         description: 'Pomodoro timer notifications',
         importance: Importance.high,
         playSound: true,
-        sound: RawResourceAndroidNotificationSound('alarm_clock'),
+        sound: notifSound,
         enableVibration: true,
       ),
     );
+  }
+
+  /// Recreates notification channels with the current [defaultNotifMusic].
+  /// Call this after changing [defaultNotifMusic] in settings so Android
+  /// picks up the new sound (channels are cached by Android and must be
+  /// deleted + recreated to reflect a new sound selection).
+  static Future<void> recreateNotifChannels() async {
+    await _createChannels();
   }
 
   // ── Permission request ────────────────────────────────────────────────────
@@ -170,20 +179,36 @@ class NotificationService {
     final scheduled = _tzFrom(task.date, task.time);
     if (scheduled == null) return;
 
-    final androidDetails = AndroidNotificationDetails(
-      'alarm_channel',
-      'Smart Alarm',
-      channelDescription: 'Task alarms — rings even with screen off',
-      importance: Importance.max,
-      priority: Priority.high,
-      fullScreenIntent: true,
-      category: AndroidNotificationCategory.alarm,
-      playSound: true,
-      sound: const RawResourceAndroidNotificationSound('alarm_clock'),
-      enableVibration: vibrationEnabled,
-      visibility: NotificationVisibility.public,
-      autoCancel: false,
-    );
+    final useAlarmChannel = task.alarmMode == AlarmMode.alarmMusic;
+
+    final AndroidNotificationDetails androidDetails = useAlarmChannel
+        ? AndroidNotificationDetails(
+            'alarm_channel',
+            'Smart Alarm',
+            channelDescription: 'Task alarms — rings even with screen off',
+            importance: Importance.max,
+            priority: Priority.high,
+            fullScreenIntent: true,
+            category: AndroidNotificationCategory.alarm,
+            playSound: true,
+            sound: const RawResourceAndroidNotificationSound('alarm_clock'),
+            enableVibration: vibrationEnabled,
+            visibility: NotificationVisibility.public,
+            autoCancel: false,
+            icon: '@drawable/ic_notification',
+          )
+        : AndroidNotificationDetails(
+            'reminder_channel',
+            'Task Reminders',
+            channelDescription: 'Reminder alerts before task start time',
+            importance: Importance.high,
+            priority: Priority.high,
+            playSound: true,
+            sound: RawResourceAndroidNotificationSound(
+                _musicToRawResource(defaultNotifMusic)),
+            enableVibration: vibrationEnabled,
+            icon: '@drawable/ic_notification',
+          );
 
     const iosDetails = DarwinNotificationDetails(
       presentAlert: true,
@@ -194,7 +219,7 @@ class NotificationService {
 
     await _plugin.zonedSchedule(
       _alarmId(task.id),
-      '⏰  ${task.title}',
+      useAlarmChannel ? '⏰  ${task.title}' : '🔔  ${task.title}',
       task.description.isNotEmpty
           ? task.description
           : 'Time to start your task!',
@@ -253,6 +278,7 @@ class NotificationService {
               enableVibration: vibrationEnabled,
               visibility: NotificationVisibility.public,
               autoCancel: false,
+              icon: '@drawable/ic_notification',
             )
           : AndroidNotificationDetails(
               'reminder_channel',
@@ -260,9 +286,10 @@ class NotificationService {
               importance: Importance.high,
               priority: Priority.high,
               playSound: true,
-              sound: const RawResourceAndroidNotificationSound(
-                  'mixkit_happy_bells_notification_937'),
+              sound: RawResourceAndroidNotificationSound(
+                  _musicToRawResource(defaultNotifMusic)),
               enableVibration: vibrationEnabled,
+              icon: '@drawable/ic_notification',
             );
 
       await _plugin.zonedSchedule(
@@ -328,6 +355,7 @@ class NotificationService {
               enableVibration: vibrationEnabled,
               visibility: NotificationVisibility.public,
               autoCancel: false,
+              icon: '@drawable/ic_notification',
             )
           : AndroidNotificationDetails(
               'reminder_channel',
@@ -335,9 +363,10 @@ class NotificationService {
               importance: Importance.high,
               priority: Priority.high,
               playSound: true,
-              sound: const RawResourceAndroidNotificationSound(
-                  'mixkit_happy_bells_notification_937'),
+              sound: RawResourceAndroidNotificationSound(
+                  _musicToRawResource(defaultNotifMusic)),
               enableVibration: vibrationEnabled,
+              icon: '@drawable/ic_notification',
             );
 
       await _plugin.zonedSchedule(
@@ -410,15 +439,16 @@ class NotificationService {
     // Skip if DND is enabled and time falls within quiet hours
     if (dndEnabled && _isDndTime(remindTz)) return;
 
-    const androidDetails = AndroidNotificationDetails(
+    final androidDetails = AndroidNotificationDetails(
       'reminder_channel',
       'Task Reminders',
       importance: Importance.high,
       priority: Priority.high,
       playSound: true,
       sound: RawResourceAndroidNotificationSound(
-          'mixkit_happy_bells_notification_937'),
+          _musicToRawResource(defaultNotifMusic)),
       enableVibration: true,
+      icon: '@drawable/ic_notification',
     );
 
     const iosDetails = DarwinNotificationDetails(
@@ -434,7 +464,7 @@ class NotificationService {
           ? 'Due at ${_formatTime(subtask.dueTime!)}'
           : 'Due today',
       remindTz,
-      const NotificationDetails(android: androidDetails, iOS: iosDetails),
+      NotificationDetails(android: androidDetails, iOS: iosDetails),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
@@ -516,42 +546,40 @@ class NotificationService {
 
       if (entry.type == BirthdayType.self) {
         if (daysOffset == 0) {
-          title = '🎂 Selamat Ulang Tahun!';
-          body =
-              'Hari ini ulang tahunmu! Semoga hari-harimu penuh kebahagiaan 🎉🎊';
+          title = '🎂 Happy Birthday!';
+          body = 'Today is your birthday! Wishing you a day full of joy 🎉🎊';
         } else if (daysOffset == 1) {
-          title = '🎂 Reminder Ulang Tahun';
-          body = 'Besok ulang tahunmu! Siapkan perayaanmu 🥳';
+          title = '🎂 Birthday Reminder';
+          body = 'Tomorrow is your birthday! Prepare your celebration 🥳';
         } else {
-          title = '🎂 Reminder Ulang Tahun';
-          body =
-              'Sebentar lagi ulang tahunmu! Tinggal $daysOffset hari lagi 🎉';
+          title = '🎂 Birthday Reminder';
+          body = 'Your birthday is coming up! Only $daysOffset days left 🎉';
         }
       } else {
         final name = entry.name;
         if (daysOffset == 0) {
-          title = '🎂 Selamat Ulang Tahun $name!';
-          body = 'Hari ini ulang tahun $name! Jangan lupa ucapkan selamat 🎊';
+          title = '🎂 Happy Birthday $name!';
+          body = "Today is $name's birthday! Don't forget to wish them 🎊";
         } else if (daysOffset == 1) {
-          title = '🎂 Reminder Ulang Tahun $name';
-          body = 'Besok $name ulang tahun! Jangan lupa ucapkan selamat 🎁';
+          title = '🎂 Birthday Reminder: $name';
+          body = "$name's birthday is tomorrow! Don't forget to wish them 🎁";
         } else {
-          title = '🎂 Reminder Ulang Tahun $name';
-          body =
-              'Sebentar lagi $name ulang tahun! Tinggal $daysOffset hari lagi';
+          title = '🎂 Birthday Reminder: $name';
+          body = "$name's birthday is coming up! Only $daysOffset days left";
         }
       }
 
       final androidDetails = AndroidNotificationDetails(
         'birthday_channel',
         'Birthday Reminders',
-        channelDescription: 'Pengingat ulang tahun',
+        channelDescription: 'Birthday reminders',
         importance: Importance.high,
         priority: Priority.high,
         playSound: true,
-        sound: const RawResourceAndroidNotificationSound(
-            'mixkit_happy_bells_notification_937'),
+        sound: RawResourceAndroidNotificationSound(
+            _musicToRawResource(defaultNotifMusic)),
         enableVibration: vibrationEnabled,
+        icon: '@drawable/ic_notification',
         largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
       );
 
@@ -587,15 +615,17 @@ class NotificationService {
     required String title,
     required String body,
   }) async {
-    const androidDetails = AndroidNotificationDetails(
+    final androidDetails = AndroidNotificationDetails(
       'pomodoro_channel',
       'Pomodoro Timer',
       channelDescription: 'Pomodoro timer notifications',
       importance: Importance.high,
       priority: Priority.high,
       playSound: true,
-      sound: RawResourceAndroidNotificationSound('alarm_clock'),
+      sound: RawResourceAndroidNotificationSound(
+          _musicToRawResource(defaultNotifMusic)),
       enableVibration: true,
+      icon: '@drawable/ic_notification',
     );
 
     const iosDetails = DarwinNotificationDetails(
@@ -608,12 +638,22 @@ class NotificationService {
       99999, // Constant ID for Pomodoro notifications
       title,
       body,
-      const NotificationDetails(android: androidDetails, iOS: iosDetails),
+      NotificationDetails(android: androidDetails, iOS: iosDetails),
       payload: 'pomodoro',
     );
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /// Converts a music filename like 'mixkit-happy-bells-notification-937.mp3'
+  /// into an Android raw resource name 'mixkit_happy_bells_notification_937'.
+  static String _musicToRawResource(String filename) {
+    return filename
+        .replaceAll(RegExp(r'\.[^.]+$'), '') // remove extension
+        .replaceAll('-', '_') // hyphens → underscores
+        .replaceAll(' ', '_'); // spaces → underscores
+  }
+
   static int _alarmId(String id) => id.hashCode.abs() % 2147483647;
   static int _reminderId(String id, int i) =>
       (_alarmId(id) + i + 1) % 2147483647;

@@ -46,7 +46,7 @@ class _NotificationListScreenState
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Notifikasi',
+          'Notifications',
           style: GoogleFonts.nunito(
             fontWeight: FontWeight.w800,
             fontSize: 20,
@@ -58,7 +58,7 @@ class _NotificationListScreenState
               onPressed: () =>
                   ref.read(notificationListProvider.notifier).markAllRead(),
               child: Text(
-                'Tandai Semua Dibaca',
+                'Mark All as Read',
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.primary,
                   fontSize: 12,
@@ -123,7 +123,7 @@ class _NotificationListScreenState
           ),
           const SizedBox(height: 20),
           Text(
-            'Belum ada notifikasi',
+            'No notifications yet',
             style: GoogleFonts.nunito(
               fontSize: 18,
               fontWeight: FontWeight.w700,
@@ -132,7 +132,7 @@ class _NotificationListScreenState
           ),
           const SizedBox(height: 8),
           Text(
-            'Notifikasi task yang sudah tiba waktunya\nakan muncul di sini.',
+            'Task notifications that have triggered\nwill appear here.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontSize: 13,
@@ -239,22 +239,13 @@ class _NotificationTile extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: item.alarmMode == AlarmMode.alarmMusic
-                      ? statusRisk.withValues(alpha: isDark ? 0.2 : 0.12)
-                      : Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withValues(alpha: isDark ? 0.2 : 0.12),
+                  color: const Color(0xFFE8F0FE),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  item.alarmMode == AlarmMode.alarmMusic
-                      ? Icons.alarm_rounded
-                      : Icons.notifications_rounded,
-                  size: 22,
-                  color: item.alarmMode == AlarmMode.alarmMusic
-                      ? statusRisk
-                      : Theme.of(context).colorScheme.primary,
+                padding: const EdgeInsets.all(7),
+                child: Image.asset(
+                  'assets/icon-launcher-2-transparent.png',
+                  fit: BoxFit.contain,
                 ),
               ),
               const SizedBox(width: 12),
@@ -345,24 +336,24 @@ class _NotificationTile extends StatelessWidget {
     final now = DateTime.now();
     final diff = now.difference(dt);
 
-    if (diff.inMinutes < 1) return 'Baru saja';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} menit lalu';
-    if (diff.inHours < 24) return '${diff.inHours} jam lalu';
-    if (diff.inDays == 1) return 'Kemarin';
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return '${diff.inHours} hr ago';
+    if (diff.inDays == 1) return 'Yesterday';
 
     const months = [
       'Jan',
       'Feb',
       'Mar',
       'Apr',
-      'Mei',
+      'May',
       'Jun',
       'Jul',
-      'Agu',
+      'Aug',
       'Sep',
-      'Okt',
+      'Oct',
       'Nov',
-      'Des',
+      'Dec',
     ];
     final h = dt.hour.toString().padLeft(2, '0');
     final m = dt.minute.toString().padLeft(2, '0');
@@ -386,7 +377,7 @@ class _ModeBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
-        isAlarm ? 'Alarm' : 'Notifikasi',
+        isAlarm ? 'Alarm' : 'Notification',
         style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w700,

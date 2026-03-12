@@ -9,6 +9,7 @@ import '../services/audio_service.dart';
 import '../services/notification_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/app_toast.dart';
+import '../utils/dialog_utils.dart';
 import 'task_detail_screen.dart';
 
 class AlarmScreen extends ConsumerStatefulWidget {
@@ -530,7 +531,7 @@ class _AlarmScreenState extends ConsumerState<AlarmScreen>
     final snoozeOptions = [5, 10, 15, 30];
     int selected = 15;
 
-    showModalBottomSheet(
+    showScaleBottomSheet(
       context: context,
       backgroundColor: darkSurface,
       shape: const RoundedRectangleBorder(

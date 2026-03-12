@@ -60,11 +60,11 @@ class BirthdayEntry {
   String get typeLabel {
     switch (type) {
       case BirthdayType.self:
-        return 'Saya';
+        return 'Me';
       case BirthdayType.friend:
-        return 'Teman';
+        return 'Friend';
       case BirthdayType.family:
-        return 'Keluarga';
+        return 'Family';
     }
   }
 

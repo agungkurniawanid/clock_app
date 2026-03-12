@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import '../providers/app_providers.dart';
 import '../models/pomodoro_model.dart';
 import '../services/audio_service.dart';
+import '../utils/dialog_utils.dart';
 
 class PomodoroScreen extends ConsumerStatefulWidget {
   const PomodoroScreen({super.key});
@@ -599,7 +600,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen>
   }
 
   void _showStopConfirmation(BuildContext context) {
-    showDialog(
+    showScaleDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Stop Timer?'),
@@ -624,7 +625,6 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen>
 
   void _showSettingsDialog(BuildContext context) {
     final currentSettings = ref.read(pomodoroProvider).settings;
-
     int workDuration = currentSettings.workDuration;
     int shortBreak = currentSettings.shortBreakDuration;
     int longBreak = currentSettings.longBreakDuration;
@@ -634,169 +634,647 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen>
     String alarmSound = currentSettings.alarmSound;
     double alarmVolume = currentSettings.alarmVolume;
 
-    showDialog(
+    showGeneralDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(
-            'Pomodoro Settings',
-            style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-          ),
-          content: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.7,
-              maxWidth: MediaQuery.of(context).size.width * 0.9,
+      barrierDismissible: true,
+      barrierLabel: 'Settings',
+      barrierColor: Colors.black.withOpacity(0.55),
+      transitionDuration: const Duration(milliseconds: 320),
+      transitionBuilder: (ctx, animation, _, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutBack,
+        );
+        return ScaleTransition(
+          scale: curved,
+          child: FadeTransition(opacity: animation, child: child),
+        );
+      },
+      pageBuilder: (ctx, _, __) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) => Center(
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                width: MediaQuery.of(ctx).size.width * 0.92,
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.88,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(isDark ? 0.45 : 0.18),
+                      blurRadius: 40,
+                      offset: const Offset(0, 14),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // ── Header ──
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 16, 20),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(28)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.22),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.timer_outlined,
+                                color: Colors.white, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Pomodoro Settings',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                Text(
+                                  'Customize your focus sessions',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: Colors.white.withOpacity(0.8),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => Navigator.pop(ctx),
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.22),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.close,
+                                  color: Colors.white, size: 16),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // ── Scrollable Content ──
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Timer Duration section
+                            _settingsSectionLabel(ctx, isDark, 'Timer Duration',
+                                Icons.hourglass_empty_rounded),
+                            const SizedBox(height: 10),
+                            _buildStepperRow(
+                              ctx,
+                              isDark,
+                              'Work Session',
+                              workDuration,
+                              1,
+                              60,
+                              'min',
+                              onDecrement: () {
+                                if (workDuration > 1)
+                                  setDialogState(() => workDuration--);
+                              },
+                              onIncrement: () {
+                                if (workDuration < 60)
+                                  setDialogState(() => workDuration++);
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            _buildStepperRow(
+                              ctx,
+                              isDark,
+                              'Short Break',
+                              shortBreak,
+                              1,
+                              30,
+                              'min',
+                              onDecrement: () {
+                                if (shortBreak > 1)
+                                  setDialogState(() => shortBreak--);
+                              },
+                              onIncrement: () {
+                                if (shortBreak < 30)
+                                  setDialogState(() => shortBreak++);
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            _buildStepperRow(
+                              ctx,
+                              isDark,
+                              'Long Break',
+                              longBreak,
+                              1,
+                              60,
+                              'min',
+                              onDecrement: () {
+                                if (longBreak > 1)
+                                  setDialogState(() => longBreak--);
+                              },
+                              onIncrement: () {
+                                if (longBreak < 60)
+                                  setDialogState(() => longBreak++);
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            _buildStepperRow(
+                              ctx,
+                              isDark,
+                              'Sessions / Long Break',
+                              sessionsBeforeLong,
+                              2,
+                              10,
+                              'x',
+                              onDecrement: () {
+                                if (sessionsBeforeLong > 2)
+                                  setDialogState(() => sessionsBeforeLong--);
+                              },
+                              onIncrement: () {
+                                if (sessionsBeforeLong < 10)
+                                  setDialogState(() => sessionsBeforeLong++);
+                              },
+                            ),
+                            const SizedBox(height: 20),
+                            _settingsDivider(isDark),
+                            const SizedBox(height: 16),
+
+                            // Auto Start section
+                            _settingsSectionLabel(ctx, isDark, 'Auto Start',
+                                Icons.autorenew_rounded),
+                            const SizedBox(height: 10),
+                            _buildModernSwitch(
+                              ctx,
+                              isDark,
+                              'Auto-start Breaks',
+                              'Automatically start break after work',
+                              autoStartBreaks,
+                              (v) => setDialogState(() => autoStartBreaks = v),
+                            ),
+                            const SizedBox(height: 8),
+                            _buildModernSwitch(
+                              ctx,
+                              isDark,
+                              'Auto-start Pomodoros',
+                              'Automatically start work after break',
+                              autoStartPomodoros,
+                              (v) =>
+                                  setDialogState(() => autoStartPomodoros = v),
+                            ),
+                            const SizedBox(height: 20),
+                            _settingsDivider(isDark),
+                            const SizedBox(height: 16),
+
+                            // Alarm Sound section
+                            _settingsSectionLabel(ctx, isDark, 'Alarm Sound',
+                                Icons.music_note_outlined),
+                            const SizedBox(height: 10),
+                            _buildSoundSelector(ctx, isDark, alarmSound,
+                                () async {
+                              await _showMusicPickerSheet(ctx, (newSound) {
+                                if (newSound != null)
+                                  setDialogState(() => alarmSound = newSound);
+                              });
+                            }),
+                            const SizedBox(height: 14),
+                            // Volume slider row
+                            Row(
+                              children: [
+                                Icon(Icons.volume_down_rounded,
+                                    size: 18,
+                                    color: isDark
+                                        ? Colors.white54
+                                        : Colors.black38),
+                                Expanded(
+                                  child: SliderTheme(
+                                    data: SliderThemeData(
+                                      trackHeight: 4,
+                                      thumbShape: const RoundSliderThumbShape(
+                                          enabledThumbRadius: 8),
+                                      overlayShape:
+                                          const RoundSliderOverlayShape(
+                                              overlayRadius: 16),
+                                      activeTrackColor: const Color(0xFFFF6B6B),
+                                      inactiveTrackColor: isDark
+                                          ? Colors.white12
+                                          : Colors.black12,
+                                      thumbColor: const Color(0xFFFF6B6B),
+                                      overlayColor: const Color(0xFFFF6B6B)
+                                          .withOpacity(0.2),
+                                    ),
+                                    child: Slider(
+                                      value: alarmVolume,
+                                      min: 0,
+                                      max: 100,
+                                      divisions: 100,
+                                      onChanged: (val) => setDialogState(
+                                          () => alarmVolume = val),
+                                    ),
+                                  ),
+                                ),
+                                Icon(Icons.volume_up_rounded,
+                                    size: 18,
+                                    color: isDark
+                                        ? Colors.white54
+                                        : Colors.black38),
+                                const SizedBox(width: 8),
+                                SizedBox(
+                                  width: 42,
+                                  child: Text(
+                                    '${alarmVolume.round()}%',
+                                    textAlign: TextAlign.right,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark
+                                          ? Colors.white60
+                                          : Colors.black54,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // ── Footer Buttons ──
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              style: TextButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                backgroundColor: isDark
+                                    ? Colors.white.withOpacity(0.07)
+                                    : Colors.grey.shade100,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14)),
+                              ),
+                              child: Text(
+                                'Cancel',
+                                style: GoogleFonts.inter(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color:
+                                      isDark ? Colors.white60 : Colors.black54,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: GestureDetector(
+                              onTap: () {
+                                ref
+                                    .read(pomodoroProvider.notifier)
+                                    .updateSettings(PomodoroSettings(
+                                      workDuration: workDuration,
+                                      shortBreakDuration: shortBreak,
+                                      longBreakDuration: longBreak,
+                                      sessionsBeforeLongBreak:
+                                          sessionsBeforeLong,
+                                      autoStartBreaks: autoStartBreaks,
+                                      autoStartPomodoros: autoStartPomodoros,
+                                      alarmSound: alarmSound,
+                                      alarmVolume: alarmVolume,
+                                    ));
+                                Navigator.pop(ctx);
+                              },
+                              child: Container(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Color(0xFFFF6B6B),
+                                      Color(0xFFFF8E53),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFFF6B6B)
+                                          .withOpacity(0.35),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    'Save Settings',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            child: SingleChildScrollView(
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _settingsSectionLabel(
+      BuildContext context, bool isDark, String title, IconData icon) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFF6B6B).withOpacity(0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 15, color: const Color(0xFFFF6B6B)),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white70 : Colors.black54,
+            letterSpacing: 0.3,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStepperRow(
+    BuildContext context,
+    bool isDark,
+    String label,
+    int value,
+    int min,
+    int max,
+    String unit, {
+    required VoidCallback onDecrement,
+    required VoidCallback onIncrement,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade200,
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: isDark ? Colors.white.withOpacity(0.85) : Colors.black87,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: value > min ? onDecrement : null,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: value > min
+                    ? const Color(0xFFFF6B6B).withOpacity(0.12)
+                    : (isDark
+                        ? Colors.white.withOpacity(0.04)
+                        : Colors.grey.shade200),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.remove,
+                size: 18,
+                color: value > min
+                    ? const Color(0xFFFF6B6B)
+                    : (isDark ? Colors.white24 : Colors.grey.shade400),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 52,
+            child: Column(
+              children: [
+                Text(
+                  '$value',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                Text(
+                  unit,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? Colors.white38 : Colors.black38,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: value < max ? onIncrement : null,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: value < max
+                    ? const Color(0xFFFF6B6B).withOpacity(0.12)
+                    : (isDark
+                        ? Colors.white.withOpacity(0.04)
+                        : Colors.grey.shade200),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.add,
+                size: 18,
+                color: value < max
+                    ? const Color(0xFFFF6B6B)
+                    : (isDark ? Colors.white24 : Colors.grey.shade400),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernSwitch(
+    BuildContext context,
+    bool isDark,
+    String title,
+    String subtitle,
+    bool value,
+    ValueChanged<bool> onChanged,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade200,
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: isDark
+                        ? Colors.white.withOpacity(0.85)
+                        : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: isDark ? Colors.white38 : Colors.black38,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Transform.scale(
+            scale: 0.85,
+            child: Switch(
+              value: value,
+              onChanged: onChanged,
+              activeColor: Colors.white,
+              activeTrackColor: const Color(0xFFFF6B6B),
+              inactiveTrackColor: isDark
+                  ? Colors.white.withOpacity(0.12)
+                  : Colors.grey.shade300,
+              inactiveThumbColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSoundSelector(
+    BuildContext context,
+    bool isDark,
+    String currentSound,
+    VoidCallback onTap,
+  ) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color:
+                isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade200,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF6B6B).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.music_note_rounded,
+                  color: Color(0xFFFF6B6B), size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildSettingItem(
-                    'Work Duration',
-                    '$workDuration minutes',
-                    () async {
-                      final result = await _showNumberPicker(
-                        context,
-                        'Work Duration (minutes)',
-                        workDuration,
-                        1,
-                        60,
-                      );
-                      if (result != null) {
-                        setState(() => workDuration = result);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _buildSettingItem(
-                    'Short Break',
-                    '$shortBreak minutes',
-                    () async {
-                      final result = await _showNumberPicker(
-                        context,
-                        'Short Break (minutes)',
-                        shortBreak,
-                        1,
-                        30,
-                      );
-                      if (result != null) {
-                        setState(() => shortBreak = result);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _buildSettingItem(
-                    'Long Break',
-                    '$longBreak minutes',
-                    () async {
-                      final result = await _showNumberPicker(
-                        context,
-                        'Long Break (minutes)',
-                        longBreak,
-                        1,
-                        60,
-                      );
-                      if (result != null) {
-                        setState(() => longBreak = result);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _buildSettingItem(
-                    'Sessions Before Long Break',
-                    '$sessionsBeforeLong sessions',
-                    () async {
-                      final result = await _showNumberPicker(
-                        context,
-                        'Sessions Before Long Break',
-                        sessionsBeforeLong,
-                        2,
-                        10,
-                      );
-                      if (result != null) {
-                        setState(() => sessionsBeforeLong = result);
-                      }
-                    },
-                  ),
-                  const Divider(height: 24),
                   Text(
-                    'Alarm Sound',
+                    'Sound',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: isDark ? Colors.white38 : Colors.black38,
+                    ),
+                  ),
+                  Text(
+                    AudioService.displayName(currentSound),
                     style: GoogleFonts.inter(
                       fontSize: 14,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w500,
+                      color: isDark
+                          ? Colors.white.withOpacity(0.85)
+                          : Colors.black87,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  _buildSettingItem(
-                    'Sound',
-                    AudioService.displayName(alarmSound),
-                    () async {
-                      await _showMusicPickerSheet(context, (newSound) {
-                        if (newSound != null) {
-                          setState(() => alarmSound = newSound);
-                        }
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Volume: ${alarmVolume.round()}%',
-                    style: GoogleFonts.inter(fontSize: 14),
-                  ),
-                  Slider(
-                    value: alarmVolume,
-                    min: 0,
-                    max: 100,
-                    divisions: 100,
-                    label: '${alarmVolume.round()}%',
-                    onChanged: (val) => setState(() => alarmVolume = val),
-                  ),
-                  const Divider(height: 24),
-                  SwitchListTile(
-                    title: Text(
-                      'Auto-start Breaks',
-                      style: GoogleFonts.inter(fontSize: 14),
-                    ),
-                    value: autoStartBreaks,
-                    onChanged: (val) => setState(() => autoStartBreaks = val),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  SwitchListTile(
-                    title: Text(
-                      'Auto-start Pomodoros',
-                      style: GoogleFonts.inter(fontSize: 14),
-                    ),
-                    value: autoStartPomodoros,
-                    onChanged: (val) =>
-                        setState(() => autoStartPomodoros = val),
-                    contentPadding: EdgeInsets.zero,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                final newSettings = PomodoroSettings(
-                  workDuration: workDuration,
-                  shortBreakDuration: shortBreak,
-                  longBreakDuration: longBreak,
-                  sessionsBeforeLongBreak: sessionsBeforeLong,
-                  autoStartBreaks: autoStartBreaks,
-                  autoStartPomodoros: autoStartPomodoros,
-                  alarmSound: alarmSound,
-                  alarmVolume: alarmVolume,
-                );
-                ref.read(pomodoroProvider.notifier).updateSettings(newSettings);
-                Navigator.pop(context);
-              },
-              child: const Text('Save'),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 22,
+              color: isDark ? Colors.white38 : Colors.black38,
             ),
           ],
         ),
@@ -804,93 +1282,11 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen>
     );
   }
 
-  Widget _buildSettingItem(String label, String value, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.grey.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: GoogleFonts.inter(fontSize: 14),
-            ),
-            Row(
-              children: [
-                Text(
-                  value,
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Icon(Icons.chevron_right, size: 20),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<int?> _showNumberPicker(
-    BuildContext context,
-    String title,
-    int initialValue,
-    int min,
-    int max,
-  ) async {
-    int selectedValue = initialValue;
-
-    return showDialog<int>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title, style: GoogleFonts.inter()),
-        content: SizedBox(
-          height: 200,
-          child: ListWheelScrollView.useDelegate(
-            itemExtent: 50,
-            physics: const FixedExtentScrollPhysics(),
-            onSelectedItemChanged: (index) {
-              selectedValue = min + index;
-            },
-            controller: FixedExtentScrollController(
-              initialItem: initialValue - min,
-            ),
-            childDelegate: ListWheelChildBuilderDelegate(
-              builder: (context, index) {
-                final value = min + index;
-                if (value > max) return null;
-                return Center(
-                  child: Text(
-                    '$value',
-                    style: GoogleFonts.inter(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, selectedValue),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
+  Widget _settingsDivider(bool isDark) {
+    return Divider(
+      color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade200,
+      thickness: 1,
+      height: 1,
     );
   }
 
@@ -925,7 +1321,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen>
 
     String? previewingFile;
 
-    await showModalBottomSheet(
+    await showScaleBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

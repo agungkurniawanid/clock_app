@@ -7,6 +7,7 @@ import '../data/global_events.dart';
 import '../services/storage_service.dart';
 import '../widgets/swipeable_card.dart';
 import '../widgets/empty_state_widget.dart';
+import '../utils/dialog_utils.dart';
 import 'add_task_screen.dart';
 import 'birthday_screen.dart';
 import 'task_detail_screen.dart';
@@ -387,7 +388,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
             padding:
                 const EdgeInsets.only(left: 72, right: 16, bottom: 12, top: 2),
             child: Text(
-              'Tidak ada tugas untuk hari ini',
+              'No tasks for today',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: const Color(0xFF171717),
                     fontStyle: FontStyle.italic,
@@ -426,14 +427,14 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     if (birthdays.isEmpty) {
       return EmptyStateWidget(
         icon: Icons.cake_rounded,
-        title: 'Belum Ada Data Ulang Tahun',
+        title: 'No Birthday Data Yet',
         subtitle:
-            'Tambahkan ulang tahun Anda, keluarga, atau teman di halaman Ulang Tahun.',
+            'Add your birthdays, family, or friends on the Birthday page.',
         onAction: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const BirthdayScreen()),
         ),
-        actionLabel: 'Buka Ulang Tahun',
+        actionLabel: 'Open Birthdays',
       );
     }
 
@@ -696,7 +697,7 @@ class _FilterButton extends ConsumerWidget {
   }
 
   void _showFilterSheet(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet(
+    showScaleBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -1126,7 +1127,7 @@ class _BirthdayMiniCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '🎉 Ulang Tahun ${entry.name}!',
+                  '🎉 ${entry.name}\'s Birthday!',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: entry.color,
                         fontWeight: FontWeight.w800,
@@ -1175,18 +1176,18 @@ class _BirthdayEventCard extends StatelessWidget {
   const _BirthdayEventCard({required this.entry, required this.nextDate});
 
   static const List<String> _monthNames = [
-    'Januari',
-    'Februari',
-    'Maret',
+    'January',
+    'February',
+    'March',
     'April',
-    'Mei',
-    'Juni',
-    'Juli',
-    'Agustus',
+    'May',
+    'June',
+    'July',
+    'August',
     'September',
-    'Oktober',
+    'October',
     'November',
-    'Desember'
+    'December'
   ];
 
   @override
@@ -1199,12 +1200,12 @@ class _BirthdayEventCard extends StatelessWidget {
 
     String dateLabel;
     if (isToday) {
-      dateLabel = '🎉 Hari ini!';
+      dateLabel = '🎉 Today!';
     } else if (isTomorrow) {
-      dateLabel = 'Besok';
+      dateLabel = 'Tomorrow';
     } else {
       dateLabel =
-          '${entry.day} ${_monthNames[entry.month - 1]} · $daysLeft hari lagi';
+          '${entry.day} ${_monthNames[entry.month - 1]} · $daysLeft days left';
     }
 
     return Container(
@@ -1403,7 +1404,7 @@ class _BirthdayInfoBadge extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Fitur Ulang Tahun Tersedia! 🎉',
+                  'Birthday Feature Available! 🎉',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: birthdayColor,
                         fontWeight: FontWeight.w800,
@@ -1412,7 +1413,7 @@ class _BirthdayInfoBadge extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Anda bisa menambahkan data tanggal ulang tahun Anda dan teman-teman di halaman Ulang Tahun. Ulang tahun akan muncul di tab All dan tab Birthday.',
+                  'You can add birthday dates for yourself and friends on the Birthday page. Birthdays will appear in the All tab and Birthday tab.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         fontSize: 12,
                         color: Theme.of(context)
@@ -1435,7 +1436,7 @@ class _BirthdayInfoBadge extends StatelessWidget {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Text(
-                          'Isi Sekarang',
+                          'Add Now',
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,
@@ -1457,7 +1458,7 @@ class _BirthdayInfoBadge extends StatelessWidget {
                               color: birthdayColor.withValues(alpha: 0.3)),
                         ),
                         child: Text(
-                          'Sudah diisi ✓',
+                          'Already added ✓',
                           style: TextStyle(
                             color: birthdayColor,
                             fontWeight: FontWeight.w700,

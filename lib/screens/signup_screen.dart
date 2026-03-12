@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import '../utils/dialog_utils.dart';
 import 'login_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -31,19 +32,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
     final primary = Theme.of(context).colorScheme.primary;
 
-    showDialog(
+    showScaleDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         icon: Icon(Icons.construction_rounded, color: primary, size: 40),
         title: const Text(
-          'Fitur Dalam Pengembangan',
+          'Feature in Development',
           textAlign: TextAlign.center,
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
         ),
         content: const Text(
-          'Fitur sinkronisasi dengan database masih dalam tahap proses pengembangan. '
-          'Saat ini data akun hanya tersimpan secara lokal di perangkat Anda.',
+          'The database sync feature is still under development. '
+          'Account data is currently stored locally on your device only.',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 14, height: 1.5),
         ),
@@ -61,7 +62,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
             ),
-            child: const Text('Mengerti',
+            child: const Text('Got it',
                 style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
@@ -110,7 +111,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  'Buat Akun Baru',
+                  'Create New Account',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w800,
@@ -118,7 +119,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Simpan dan sinkronisasi task Anda di semua perangkat.',
+                  'Save and sync your tasks across all devices.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: isDark ? darkTextSecondary : lightTextSecondary,
@@ -142,12 +143,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         textCapitalization: TextCapitalization.words,
                         decoration: _inputDecoration(
                           context,
-                          label: 'Nama Lengkap',
+                          label: 'Full Name',
                           icon: Icons.person_outline_rounded,
                         ),
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) {
-                            return 'Nama lengkap tidak boleh kosong';
+                            return 'Full name is required';
                           }
                           return null;
                         },
@@ -165,10 +166,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         ),
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) {
-                            return 'Email tidak boleh kosong';
+                            return 'Email is required';
                           }
                           if (!v.contains('@')) {
-                            return 'Format email tidak valid';
+                            return 'Invalid email format';
                           }
                           return null;
                         },
@@ -197,10 +198,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         ),
                         validator: (v) {
                           if (v == null || v.isEmpty) {
-                            return 'Password tidak boleh kosong';
+                            return 'Password is required';
                           }
                           if (v.length < 6) {
-                            return 'Password minimal 6 karakter';
+                            return 'Password must be at least 6 characters';
                           }
                           return null;
                         },
@@ -213,7 +214,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         keyboardType: TextInputType.phone,
                         decoration: _inputDecoration(
                           context,
-                          label: 'Nomor Telepon (opsional)',
+                          label: 'Phone Number (optional)',
                           icon: Icons.phone_outlined,
                         ),
                       ),
@@ -230,7 +231,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            'Nomor telepon untuk pemulihan akun.',
+                            'Phone number for account recovery.',
                             style: TextStyle(
                               fontSize: 12,
                               color: isDark
@@ -257,7 +258,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           borderRadius: BorderRadius.circular(16)),
                     ),
                     child: const Text(
-                      'Daftar & Masuk',
+                      'Register & Sign In',
                       style:
                           TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                     ),
@@ -272,7 +273,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Text(
-                        'atau',
+                        'or',
                         style: TextStyle(
                           fontSize: 13,
                           color:
@@ -297,7 +298,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Sudah punya akun?',
+                        'Already have an account?',
                         style: Theme.of(context)
                             .textTheme
                             .bodyMedium

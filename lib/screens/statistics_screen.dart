@@ -5,6 +5,7 @@ import '../providers/app_providers.dart';
 import '../models/task_model.dart';
 import '../models/pomodoro_model.dart';
 import '../theme/app_colors.dart';
+import '../utils/dialog_utils.dart';
 
 class StatisticsScreen extends ConsumerStatefulWidget {
   const StatisticsScreen({super.key});
@@ -1407,7 +1408,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen>
 
   void _showDeleteSessionDialog(BuildContext context, PomodoroSession session) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    showDialog(
+    showScaleDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Delete Session',
@@ -1420,8 +1421,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text('Cancel',
-                style: GoogleFonts.poppins(color: Colors.grey)),
+            child:
+                Text('Cancel', style: GoogleFonts.poppins(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -1429,8 +1430,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen>
               Navigator.of(context).pop();
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Session deleted',
-                      style: GoogleFonts.poppins()),
+                  content:
+                      Text('Session deleted', style: GoogleFonts.poppins()),
                   duration: const Duration(seconds: 2),
                 ),
               );
@@ -1448,7 +1449,7 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen>
 
   void _showClearAllHistoryDialog(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    showDialog(
+    showScaleDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Clear All History',
@@ -1461,8 +1462,8 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text('Cancel',
-                style: GoogleFonts.poppins(color: Colors.grey)),
+            child:
+                Text('Cancel', style: GoogleFonts.poppins(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: () {

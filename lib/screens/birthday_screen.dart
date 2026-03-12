@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_providers.dart';
 import '../models/birthday_model.dart';
+import '../utils/dialog_utils.dart';
 
 class BirthdayScreen extends ConsumerWidget {
   const BirthdayScreen({super.key});
@@ -13,14 +14,14 @@ class BirthdayScreen extends ConsumerWidget {
     'Feb',
     'Mar',
     'Apr',
-    'Mei',
+    'May',
     'Jun',
     'Jul',
-    'Ags',
+    'Aug',
     'Sep',
-    'Okt',
+    'Oct',
     'Nov',
-    'Des'
+    'Dec'
   ];
 
   @override
@@ -34,7 +35,7 @@ class BirthdayScreen extends ConsumerWidget {
           children: [
             Text('🎂', style: TextStyle(fontSize: 20)),
             SizedBox(width: 8),
-            Text('Ulang Tahun'),
+            Text('Birthdays'),
           ],
         ),
       ),
@@ -68,7 +69,7 @@ class BirthdayScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Belum ada data ulang tahun',
+            'No birthdays yet',
             style: Theme.of(context)
                 .textTheme
                 .titleMedium
@@ -76,7 +77,7 @@ class BirthdayScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Tambahkan ulang tahun Anda,\nkeluarga, atau teman',
+            'Add your birthdays,\nfamily, or friends',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context)
@@ -90,7 +91,7 @@ class BirthdayScreen extends ConsumerWidget {
           ElevatedButton.icon(
             onPressed: () => _showBirthdaySheet(context),
             icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Tambah Ulang Tahun'),
+            label: const Text('Add Birthday'),
             style: ElevatedButton.styleFrom(
               backgroundColor: _birthdayColor,
               foregroundColor: Colors.white,
@@ -124,14 +125,14 @@ class BirthdayScreen extends ConsumerWidget {
 
   void _confirmDelete(
       BuildContext context, WidgetRef ref, BirthdayEntry entry) {
-    showDialog(
+    showScaleDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Hapus Ulang Tahun'),
-        content: Text('Hapus ulang tahun "${entry.name}"?'),
+        title: const Text('Delete Birthday'),
+        content: Text('Delete birthday for "${entry.name}"?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
@@ -140,7 +141,7 @@ class BirthdayScreen extends ConsumerWidget {
             style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFE53E3E),
                 foregroundColor: Colors.white),
-            child: const Text('Hapus'),
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -148,7 +149,7 @@ class BirthdayScreen extends ConsumerWidget {
   }
 
   void _showBirthdaySheet(BuildContext context, {BirthdayEntry? entry}) {
-    showModalBottomSheet(
+    showScaleBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -182,11 +183,11 @@ class _BirthdayCard extends StatelessWidget {
         DateUtils.dateOnly(nextDate).difference(DateUtils.dateOnly(now)).inDays;
     final String countdown;
     if (diff == 0) {
-      countdown = 'Hari ini! 🎉';
+      countdown = 'Today! 🎉';
     } else if (diff == 1) {
-      countdown = 'Besok';
+      countdown = 'Tomorrow';
     } else {
-      countdown = '$diff hari lagi';
+      countdown = '$diff days left';
     }
     final isToday = diff == 0;
 
@@ -323,18 +324,18 @@ class _BirthdayFormSheetState extends ConsumerState<_BirthdayFormSheet> {
   Color _color = BirthdayEntry.paletteColors[0];
 
   static const List<String> _monthNames = [
-    'Januari',
-    'Februari',
-    'Maret',
+    'January',
+    'February',
+    'March',
     'April',
-    'Mei',
-    'Juni',
-    'Juli',
-    'Agustus',
+    'May',
+    'June',
+    'July',
+    'August',
     'September',
-    'Oktober',
+    'October',
     'November',
-    'Desember'
+    'December'
   ];
 
   @override
@@ -405,9 +406,7 @@ class _BirthdayFormSheetState extends ConsumerState<_BirthdayFormSheet> {
               const Text('🎂', style: TextStyle(fontSize: 22)),
               const SizedBox(width: 8),
               Text(
-                widget.existing == null
-                    ? 'Tambah Ulang Tahun'
-                    : 'Edit Ulang Tahun',
+                widget.existing == null ? 'Add Birthday' : 'Edit Birthday',
                 style: Theme.of(context)
                     .textTheme
                     .titleMedium
@@ -422,8 +421,8 @@ class _BirthdayFormSheetState extends ConsumerState<_BirthdayFormSheet> {
             controller: _nameController,
             onChanged: (_) => setState(() {}),
             decoration: const InputDecoration(
-              labelText: 'Nama',
-              hintText: 'Contoh: Budi, Mama, dll.',
+              labelText: 'Name',
+              hintText: 'E.g.: Alex, Mom, etc.',
               prefixIcon: Icon(Icons.person_rounded),
             ),
           ),
@@ -436,7 +435,7 @@ class _BirthdayFormSheetState extends ConsumerState<_BirthdayFormSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Bulan',
+                    Text('Month',
                         style: Theme.of(context)
                             .textTheme
                             .labelLarge
@@ -465,7 +464,7 @@ class _BirthdayFormSheetState extends ConsumerState<_BirthdayFormSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Tanggal',
+                    Text('Date',
                         style: Theme.of(context)
                             .textTheme
                             .labelLarge
@@ -491,7 +490,7 @@ class _BirthdayFormSheetState extends ConsumerState<_BirthdayFormSheet> {
           const SizedBox(height: 16),
 
           // Type chips
-          Text('Tipe',
+          Text('Type',
               style: Theme.of(context)
                   .textTheme
                   .labelLarge
@@ -502,10 +501,10 @@ class _BirthdayFormSheetState extends ConsumerState<_BirthdayFormSheet> {
             children: BirthdayType.values.map((t) {
               final active = _type == t;
               final label = t == BirthdayType.self
-                  ? '😊 Saya'
+                  ? '😊 Me'
                   : t == BirthdayType.friend
-                      ? '👫 Teman'
-                      : '👨‍👩‍👧 Keluarga';
+                      ? '👫 Friend'
+                      : '👨‍👩‍👧 Family';
               return GestureDetector(
                 onTap: () => setState(() => _type = t),
                 child: AnimatedContainer(
@@ -533,7 +532,7 @@ class _BirthdayFormSheetState extends ConsumerState<_BirthdayFormSheet> {
           const SizedBox(height: 16),
 
           // Color picker
-          Text('Warna',
+          Text('Color',
               style: Theme.of(context)
                   .textTheme
                   .labelLarge
@@ -576,7 +575,7 @@ class _BirthdayFormSheetState extends ConsumerState<_BirthdayFormSheet> {
             child: ElevatedButton.icon(
               onPressed: _nameController.text.trim().isEmpty ? null : _save,
               icon: const Icon(Icons.check_rounded, size: 18),
-              label: Text(widget.existing == null ? 'Simpan' : 'Perbarui'),
+              label: Text(widget.existing == null ? 'Save' : 'Update'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: birthdayColor,
                 foregroundColor: Colors.white,
