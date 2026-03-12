@@ -15,7 +15,8 @@ class NoteReminder {
   final int intervalDays; // used by intervalDays
   final int dayOfMonth; // 1‒28, used by dayOfMonth
   final DateTime? specificDate; // used by oneTime
-  final bool repeat; // for intervalDays & dayOfMonth: repeat; oneTime: ignored (always once)
+  final bool
+      repeat; // for intervalDays & dayOfMonth: repeat; oneTime: ignored (always once)
   final bool isEnabled;
 
   const NoteReminder({

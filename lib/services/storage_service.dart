@@ -357,7 +357,8 @@ class StorageService {
     if (list == null) return [];
     try {
       return list
-          .map((s) => NoteFolder.fromJson(jsonDecode(s) as Map<String, dynamic>))
+          .map(
+              (s) => NoteFolder.fromJson(jsonDecode(s) as Map<String, dynamic>))
           .toList();
     } catch (_) {
       return [];
