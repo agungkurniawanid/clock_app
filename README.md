@@ -2,10 +2,10 @@
 
 ![Flutter](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)
 ![Dart](https://img.shields.io/badge/Dart-0175C2?style=for-the-badge&logo=dart&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.0.0-blue?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.1.0-blue?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
 
-**Smart Alarm & Task Scheduler Clock App** adalah aplikasi manajemen tugas dan alarm pintar yang canggih, dirancang untuk meningkatkan produktivitas harian Anda. Aplikasi ini dilengkapi dengan sistem alarm yang dapat disesuaikan, analitik mendalam, pengingat fleksibel, manajemen ulang tahun, dan antarmuka yang elegan dengan dukungan dark mode.
+**Smart Alarm & Task Scheduler Clock App** adalah aplikasi manajemen tugas dan alarm pintar yang canggih, dirancang untuk meningkatkan produktivitas harian Anda. Aplikasi ini dilengkapi dengan sistem alarm yang dapat disesuaikan, analitik mendalam, pengingat fleksibel, manajemen ulang tahun, **habit tracker harian**, **sistem catatan/notes bertingkat**, dan antarmuka yang elegan dengan dukungan dark mode.
 
 ---
 
@@ -17,6 +17,8 @@
 - [Fitur Home Screen](#-fitur-home-screen)
 - [Fitur Schedule/Task List](#-fitur-scheduletask-list)
 - [Fitur Statistik & Analitik](#-fitur-statistik--analitik)
+- [Fitur Habit Tracker](#-fitur-habit-tracker)
+- [Fitur Notes & Memo](#-fitur-notes--memo)
 - [Fitur Recurring Tasks](#-fitur-recurring-tasks)
 - [Fitur Checklist & Sub-Tasks](#-fitur-checklist--sub-tasks)
 - [Fitur Due Date & Reminders](#-fitur-due-date--reminders)
@@ -88,6 +90,25 @@
    - ✅ **Completed**: Tugas yang sudah selesai
    - 📅 **Upcoming**: Tugas yang akan datang
    - 🎯 **Auto Status Update**: Status otomatis berubah berdasarkan tanggal dan waktu
+
+### 6. **Habit Tracker**
+   - 🏃 **Daily/Weekly/Monthly Habits**: Buat dan lacak kebiasaan harian, mingguan, atau bulanan
+   - 🔥 **Streak System**: Lacak streak hari berturut-turut dan rekord streak terbaik
+   - 📊 **Progress per Hari**: Target count per hari dengan visual progress bar
+   - 🗂️ **7 Kategori**: Health, Fitness, Learning, Mindfulness, Productivity, Social, Other
+   - 🎨 **Color Tags**: Warna kustom untuk setiap habit
+   - 🔔 **Pengingat**: Reminder time per habit dengan notifikasi
+   - 📁 **Arsip**: Arsipkan habit yang sudah tidak aktif
+   - 📈 **Statistik Habit**: Tab khusus di Statistics dengan bar chart 7 hari & heatmap 30 hari
+
+### 7. **Notes & Memo System**
+   - 📁 **Folder Bertingkat**: Organisasi catatan dalam folder dan sub-folder
+   - 📝 **Full-Screen Editor**: Editor teks lengkap dengan auto-save (debounce 800ms)
+   - 📊 **Word & Character Count**: Hitung kata dan karakter secara real-time
+   - 🔔 **Reminder Catatan**: 3 tipe jadwal — setiap N hari, tanggal tertentu dalam bulan, atau tanggal spesifik
+   - ⏰ **Overdue Indicator**: Border merah dan badge alarm saat review overdue
+   - 🎨 **Color Tags**: Warna kustom untuk setiap folder dan file
+   - ⚡ **Speed Dial**: Akses cepat dari FAB speed dial di halaman utama
 
 ---
 
@@ -223,6 +244,19 @@
    - 👆 **Tap to Detail**: Tap untuk detail screen
    - 🔍 **See All Button**: Navigasi ke Schedule tab
 
+### 19. **Habit Summary Card (Home)**
+   - 🏃 **Today's Progress**: Ringkasan habit hari ini (X selesai dari Y)
+   - 📊 **Progress Bar**: Bar visual keseluruhan habit hari ini
+   - 🔥 **Streak Display**: Tampilkan streak aktif terpanjang hari ini
+   - 👆 **Tap to Navigate**: Klik card langsung ke HabitScreen
+   - 🎨 **Gradient Card**: Desain card dengan warna ungu gradient
+
+### 20. **Notes Card (Home)**
+   - 📒 **Quick Access Card**: Card teal gradient untuk akses cepat ke NotesScreen
+   - 📊 **Note Count**: Menampilkan jumlah catatan yang dimiliki
+   - 🔔 **Overdue Badge**: Indikator catatan/folder yang memiliki review overdue
+   - 👆 **Tap to Navigate**: Klik card langsung ke NotesScreen
+
 ---
 
 ## 📋 Fitur Schedule/Task List
@@ -289,6 +323,11 @@
 ---
 
 ## 📊 Fitur Statistik & Analitik
+
+> **Statistik Screen** sekarang menampilkan **3 tab utama**:
+> 1. 📋 **Tasks** — Analitik tugas (filter, chart, streak, heatmap)
+> 2. 🏃 **Habits** — Chart 7 hari + heatmap 30 hari per habit
+> 3. 🎂 **Birthdays** — (dalam pengembangan)
 
 ### 25. **Time Filter Options**
    - 📅 **4 Filter Type**:
@@ -378,6 +417,127 @@
    - 📊 **Legend**: Legend "Less" to "More"
    - 🎯 **Visual Pattern**: Lihat pola aktivitas dengan cepat
    - 📈 **Consistency Tracker**: Track konsistensi penggunaan app
+
+---
+
+## 🏃 Fitur Habit Tracker
+
+### 35. **Habit Management (CRUD)**
+   - ➕ **Create Habit**: Tambah kebiasaan baru dengan form lengkap
+   - ✏️ **Edit Habit**: Edit habit yang sudah ada
+   - 🗑️ **Delete Habit**: Hapus habit dengan konfirmasi swipe-to-dismiss
+   - 📁 **Archive Habit**: Arsipkan habit yang tidak aktif (tanpa menghapus data)
+   - 💾 **Auto-save**: Otomatis tersimpan di storage lokal
+
+### 36. **Habit Form Fields**
+   - 📌 **Title**: Nama habit (wajib)
+   - 📄 **Description**: Deskripsi opsional
+   - 🗂️ **Category**: 7 kategori — Health, Fitness, Learning, Mindfulness, Productivity, Social, Other
+   - 🎨 **Color Tag**: 8 pilihan warna preset
+   - 🔄 **Frequency**: Daily, Weekly, Monthly
+   - 📅 **Days of Week**: Pilih hari aktif (khusus Weekly — default Mon–Fri)
+   - 🔢 **Target Count**: Jumlah target per hari (1–10)
+   - 📆 **Start Date**: Tanggal mulai (default hari ini)
+   - 📆 **End Date**: Opsional tanggal berakhir
+   - 🔔 **Reminder**: Toggle reminder time dengan time picker
+
+### 37. **Habit Today Tab**
+   - 📅 **Today Filter**: Hanya tampilkan habit yang aktif hari ini (`shouldOccurOn`)
+   - 📊 **Progress Bar**: Bar linear `count / targetCount` (hijau bila selesai)
+   - 🔢 **Count Label**: Tampilan `count / targetCount`
+   - 🔥 **Streak Display**: Fire icon + "X day streak" (oranye bila > 0)
+   - 🏷️ **Category Chip**: Badge kategori berwarna
+   - ✅ **Toggle Completion**: Tombol animasi — `+` saat belum, ✓ hijau saat selesai
+   - 🎨 **Colored Left Strip**: Strip warna kiri card sesuai `colorTag`
+   - 👆 **Tap to Edit**: Tap pada card untuk buka form edit
+
+### 38. **Habit All Habits Tab**
+   - 📁 **Active & Archived**: Dua grup — Active dan Archived dengan header jumlah
+   - 🔥 **Streak Info**: Current streak + best streak per habit
+   - 📂 **Archive Toggle**: Tombol arsip/pulihkan dari daftar
+   - 👈 **Swipe to Delete**: Konfirmasi dialog sebelum hapus
+   - 👆 **Tap to Edit**: Tap untuk buka form edit
+
+### 39. **Streak System**
+   - 🔥 **Current Streak**: Hitung hari berturut-turut dari hari ini ke belakang
+   - 🏆 **Longest Streak**: Rekord streak terbaik sepanjang waktu
+   - 📅 **Streak Break Detection**: Streak reset jika ada hari yang terlewat
+   - 🎯 **Per-habit Tracking**: Setiap habit memiliki streak independen
+
+### 40. **Habit Completion Tracking**
+   - 📊 **completionLog**: Map `"yyyy-MM-dd"` → jumlah completion
+   - ✅ **Toggle Logic**: Increment count, reset ke 0 bila sudah mencapai target
+   - 📈 **Partial Progress**: Support target > 1 (misalnya 3x minum air per hari)
+   - 🗓️ **Historical Data**: Semua log tersimpan untuk statistik jangka panjang
+
+### 41. **Habit Statistics (Tab di Statistics Screen)**
+   - 📊 **7-Day Bar Chart**: Bar chart completion rate per hari untuk 7 hari terakhir
+   - 🗓️ **30-Day Heatmap per Habit**: Heatmap 30 hari untuk masing-masing habit aktif
+   - 🔥 **Streak Cards**: Current streak dan best streak ditampilkan per habit
+   - 🎨 **Color-coded**: Chart dan heatmap menggunakan warna `colorTag` habit
+
+### 42. **Habit Notifications**
+   - 🔔 **Daily Reminder**: Jadwalkan notifikasi di waktu yang ditentukan per habit
+   - 📅 **Frequency-aware**: Notifikasi hanya dijadwalkan di hari habit aktif
+   - 🔕 **Cancel on Toggle**: Notifikasi dibatalkan saat reminder dimatikan
+
+---
+
+---
+
+## 📓 Fitur Notes & Memo
+
+### 43. **Notes Management (CRUD)**
+   - ➕ **Create Folder**: Buat folder untuk mengorganisasi catatan
+   - 📝 **Create Note**: Buat file catatan di dalam folder atau di root
+   - ✏️ **Edit**: Edit folder/file melalui form atau langsung di editor
+   - 🗑️ **Delete**: Hapus folder (beserta seluruh isinya) atau file dengan konfirmasi
+   - 💾 **Storage**: Data tersimpan secara lokal (storage keys: `note_folders_v1`, `note_files_v1`)
+
+### 44. **Notes Screen (Browser)**
+   - 📂 **Folder Navigation Bertingkat**: Drill-down ke dalam sub-folder tanpa pindah screen
+   - 🗺️ **Breadcrumb Navigation**: Navigasi jalur "Notes > Folder > Sub-Folder" sebagai subtitle AppBar
+   - ↩️ **Back Navigation**: Tombol kembali mengembalikan ke folder sebelumnya (bukan keluar screen)
+   - 🗂️ **Grid View Folder**: Tampilan 2-kolom grid untuk folder (aspect ratio 1.4)
+   - 📋 **List View Files**: Tampilan list vertikal untuk file catatan, diurutkan berdasarkan `updatedAt`
+   - 🔴 **Overdue Indicator**: Border merah + badge alarm pada folder/file yang review-nya sudah lewat
+   - 📝 **Content Preview**: Preview 2 baris awal isi catatan
+   - ⚙️ **Context Menu**: 3-dot menu per card dengan opsi Edit dan Delete
+
+### 45. **Note Form (Add/Edit)**
+   - 📌 **Title**: Nama folder atau judul catatan (wajib)
+   - 🎨 **Color Tag**: 6 pilihan warna preset (palet berbeda untuk folder vs file)
+   - 🔔 **Reminder Section**:
+     - Toggle enable/disable reminder
+     - **3 Tipe Jadwal**:
+       - 📅 **Setiap N Hari**: Input angka interval hari (misalnya "setiap 7 hari")
+       - 📆 **Tanggal dalam Bulan**: Grid tile hari 1–28 untuk pilih tanggal review tiap bulan
+       - 📌 **Tanggal Spesifik**: Date picker untuk tanggal sekali atau berulang
+     - 🔁 **Toggle Repeat**: Aktifkan pengulangan reminder (kecuali tipe `oneTime`)
+
+### 46. **Note File Editor**
+   - ✏️ **Full-Screen Text Editor**: Editor teks layar penuh dengan `maxLines: null` (expand)
+   - ⏱️ **Auto-Save Debounce**: Simpan otomatis 800ms setelah berhenti mengetik
+   - 💾 **Force Save on Exit**: Simpan paksa saat navigasi keluar (PopScope)
+   - 📊 **Live Stats Bar**: Tampilan word count dan character count yang diperbarui real-time
+   - 🟡 **Dirty Indicator**: Subtitle AppBar menampilkan "Unsaved changes..." saat ada perubahan
+   - ⏰ **Last Saved Display**: Subtitle menampilkan "Updated Xm ago / Xh ago / DD/MM/YYYY"
+   - 🔴 **Overdue Badge**: Badge merah "Overdue" di AppBar saat reminder sudah lewat
+   - 💾 **Manual Save Button**: Tombol save — ikon `save_rounded` (primary) saat dirty, dimmed saat bersih
+
+### 47. **Note Reminder System**
+   - 🔔 **3 Tipe Jadwal** (`NoteReminderType`):
+     - `intervalDays`: Ulangi setiap N hari dari kunjungan terakhir
+     - `dayOfMonth`: Ingatkan pada tanggal tertentu setiap bulan (hari 1–28)
+     - `oneTime`: Ingatkan pada tanggal spesifik (bisa repeat atau tidak)
+   - ✅ **Mark Visited**: Membuka folder/file akan memperbarui `lastVisitedAt` dan menjadwalkan ulang reminder berikutnya
+   - 🔕 **Cancel Reminder**: Notifikasi dibatalkan saat reminder dinonaktifkan
+   - 📬 **Notification Channel**: `notes_channel`, ID notifikasi offset 2000+
+
+### 48. **Notes Entry Points**
+   - 🏠 **Home Screen Card**: Card teal gradient di HomeScreen → NotesScreen
+   - ⚡ **Speed Dial FAB**: Menu item "Notes" di FAB speed dial → NotesScreen
+   - 🔗 **Deep Link Notification**: Tap notifikasi `note_folder_<id>` → NotesScreen(folder), `note_file_<id>` → NoteFileEditorScreen
 
 ---
 
@@ -880,7 +1040,11 @@
    - 📅 **GlobalEvent**: Model untuk holidays/events
    - ☑️ **ChecklistItem**: Model untuk checklist items
    - 📁 **SubTask**: Model untuk sub-tasks (recursive)
-   - 🔄 **toJson/fromJson**: Serialization methods untuk semua models
+   - 🏃 **HabitModel**: Model habit dengan `completionLog`, `weekDays[7]`, `targetCount`, `currentStreak`, `longestStreak`; frekuensi: `daily/weekly/monthly`; kategori: 7 opsi
+   - 📁 **NoteFolder**: Model folder dengan `parentFolderId` (bertingkat), `colorValue`, `reminder`, `lastVisitedAt`
+   - 📝 **NoteFile**: Model file catatan dengan `folderId`, `content`, `colorValue`, `reminder`, `lastVisitedAt`, `updatedAt`, `preview`
+   - 🔔 **NoteReminder**: Model jadwal review dengan `type` (`intervalDays`/`dayOfMonth`/`oneTime`), `repeat`, `computeNextReminder()`, `isOverdue()`
+   - 🔄 **toJson/fromJson**: Serialization methods untuk semua models; warna menggunakan `.toARGB32()`
 
 ### 87. **State Management**
    - 🔄 **Riverpod**: State management dengan flutter_riverpod
@@ -888,6 +1052,9 @@
      - taskListProvider
      - birthdayListProvider
      - holidayProvider
+     - habitListProvider *(Habit Tracker)*
+     - todayHabitsProvider *(derived — habit aktif hari ini)*
+     - noteProvider *(Notes & Memo — folders + files)*
      - themeModeProvider
      - accentColorIndexProvider
      - settingsProviders (volume, snooze, dll)
@@ -956,6 +1123,16 @@
    - ⚙️ **Settings Tab**: Settings & preferences
    - 🎨 **Active Indicator**: Highlight tab yang aktif
    - 🔢 **Badge Support**: Badge untuk notification count (dalam pengembangan)
+
+### 94b. **Speed Dial FAB**
+   - ⚡ **Animated Speed Dial**: FAB utama membuka menu animasi dengan 4 opsi:
+     1. ➕ **Task** → AddTaskScreen (tambah tugas baru)
+     2. 🏃 **Habits** → AddHabitScreen (tambah habit baru)
+     3. ⏱️ **Pomodoro** → Pomodoro dialog
+     4. 📒 **Notes** → NotesScreen
+   - 🎨 **Animated Menu**: Menu muncul dengan animasi scale dari bawah ke atas
+   - ❌ **Dismiss**: Tap FAB kembali atau tap di luar menu untuk menutup
+   - 🪗 **CircularNotchedRectangle**: Notch khusus FAB di tengah bottom navigation bar
 
 ### 95. **Animations & Transitions**
    - ✨ **Page Transitions**: Smooth transitions antar screen
@@ -1058,7 +1235,7 @@
    - 🎯 **Primary Buttons**: Filled buttons untuk main actions
    - 🔳 **Secondary Buttons**: Outlined buttons untuk secondary actions
    - 📝 **Text Buttons**: Text only untuk tertiary actions
-   - ➕ **FAB**: Floating action button untuk add new
+   - ➕ **FAB**: Speed Dial floating action button — buka menu animasi 4 opsi (Task, Habits, Pomodoro, Notes)
    - 🎨 **Icon Buttons**: Icon only buttons
    - 🏷️ **Chips**: Chip buttons untuk selections
    - 📊 **Button States**: Enabled, disabled, loading states
@@ -1259,15 +1436,17 @@ flutter build ios --release
 
 ```
 lib/
-├── main.dart                      # Entry point
+├── main.dart                      # Entry point + MainShell (Speed Dial FAB)
 ├── data/
 │   ├── dummy_data.dart           # Sample data
 │   └── global_events.dart        # Holiday definitions
 ├── models/
 │   ├── task_model.dart           # Task data model
-│   └── birthday_model.dart       # Birthday data model
+│   ├── birthday_model.dart       # Birthday data model
+│   ├── habit_model.dart          # Habit data model (HabitModel, HabitFrequency, HabitCategory)
+│   └── note_model.dart           # Notes data models (NoteFolder, NoteFile, NoteReminder, NoteReminderType)
 ├── providers/
-│   └── app_providers.dart        # Riverpod providers
+│   └── app_providers.dart        # Riverpod providers (semua notifier dalam satu file)
 ├── screens/
 │   ├── splash_screen.dart        # Splash screen
 │   ├── onboarding_screen.dart    # Onboarding
@@ -1278,13 +1457,18 @@ lib/
 │   ├── add_task_screen.dart      # Add/edit task
 │   ├── task_detail_screen.dart   # Task detail
 │   ├── alarm_screen.dart         # Alarm interface
-│   ├── statistics_screen.dart    # Statistics & analytics
+│   ├── statistics_screen.dart    # Statistics & analytics (3-tab: Tasks, Habits, Birthdays)
 │   ├── birthday_screen.dart      # Birthday management
 │   ├── music_screen.dart         # Music library
-│   └── settings_screen.dart      # Settings
+│   ├── settings_screen.dart      # Settings
+│   ├── habit_screen.dart         # Habit Tracker (Today + All Habits tabs)
+│   ├── add_habit_screen.dart     # Add/edit habit form
+│   ├── notes_screen.dart         # Notes browser (folder drill-down + breadcrumb)
+│   ├── add_note_item_screen.dart # Add/edit folder atau file + reminder
+│   └── note_file_editor_screen.dart  # Full-screen note editor (auto-save)
 ├── services/
-│   ├── storage_service.dart      # Local storage
-│   ├── notification_service.dart # Notifications
+│   ├── storage_service.dart      # Local storage (static methods, SharedPreferences)
+│   ├── notification_service.dart # Notifications (task, habit, notes reminders)
 │   ├── audio_service.dart        # Audio playback
 │   ├── holiday_service.dart      # Holiday fetching
 │   └── excel_service.dart        # Excel import/export
@@ -1319,6 +1503,8 @@ web/                             # Web specific
 ### Home Screen
 - Clock widget dengan waktu real-time
 - Task summary cards (Total, Upcoming, Overdue, Completed)
+- Habit summary card (progress hari ini + streak)
+- Notes quick access card (teal gradient)
 - Today's schedule horizontal scroll
 - Upcoming this week vertical list
 - Next alarm countdown banner
@@ -1357,12 +1543,26 @@ web/                             # Web specific
 - Snooze options
 
 ### Statistics
+- 3 tab: Tasks | Habits | Birthdays
 - Filter tabs (Week, Month, Year, Range)
 - Summary cards (Completion %, Done, Overdue)
 - Daily completion bar chart
 - Category breakdown
 - Streak tracking (Current & Best)
 - Activity heatmap (4 weeks)
+- Habit tab: 7-day bar chart + 30-day heatmap per habit
+
+### Habit Tracker
+- Today tab: progress bar, streak, toggle completion per habit
+- All Habits tab: active & archived, swipe to delete, archive toggle
+- Add/Edit form: title, category, color, frequency, days, target count, reminder
+
+### Notes & Memo
+- Folder browser dengan grid view dan breadcrumb navigation
+- Note list dengan content preview
+- Full-screen editor dengan auto-save dan word/char count
+- Reminder system (interval, day of month, specific date)
+- Overdue indicator (border merah + alarm badge)
 
 ### Birthday Management
 - Birthday list
@@ -1436,7 +1636,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ## 🔄 Changelog
 
-### Version 1.0.0 (Current)
+### Version 1.0.0
 - ✅ Task management (CRUD)
 - ✅ Smart alarm system
 - ✅ Recurring tasks
@@ -1451,7 +1651,15 @@ Distributed under the MIT License. See `LICENSE` for more information.
 - ✅ Authentication (mock)
 - ✅ Local storage
 
-### Version 1.1.0 (Planned)
+### Version 1.1.0 (Current)
+- ✅ **Habit Tracker** — Daily/weekly/monthly habits, streak system, statistik, reminder
+- ✅ **Notes & Memo** — Folder bertingkat, full-screen editor, auto-save, reminder 3 tipe
+- ✅ **Speed Dial FAB** — FAB animasi dengan 4 opsi: Task, Habits, Pomodoro, Notes
+- ✅ **Statistics Multi-Tab** — 3 tab: Tasks, Habits, Birthdays
+- ✅ **Home Screen Cards** — Habit summary card + Notes quick access card
+- ✅ **In-App Notifications** — Sistem notifikasi in-app
+
+### Version 1.2.0 (Planned)
 - 🔄 Cloud sync
 - 🔄 Real authentication
 - 🔄 Widgets support
