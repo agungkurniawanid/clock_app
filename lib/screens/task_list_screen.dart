@@ -49,6 +49,15 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
   bool _didInitialScroll = false;
   // Badge is visible whenever user enters this tab (unless permanently dismissed)
   bool _badgeVisible = true;
+  bool _calendarViewActive = false;
+  DateTime _calendarMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  DateTime? _selectedCalendarDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCalendarDate = DateUtils.dateOnly(DateTime.now());
+  }
 
   @override
   void dispose() {
@@ -202,6 +211,9 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     if (tabIndex == 6) {
       // Birthday tab
       bodyContent = _buildBirthdayTabView(context, birthdays);
+    } else if (showAllDates && _calendarViewActive) {
+      bodyContent =
+          _buildCalendarView(context, filteredTasks, birthdays, apiHolidays);
     } else if (showAllDates) {
       bodyContent = _buildAllDatesListView(context, _allItems);
     } else if (filteredTasks.isEmpty) {
@@ -224,9 +236,20 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Schedules'),
-        actions: const [
-          _FilterButton(),
-          SizedBox(width: 8),
+        actions: [
+          if (showAllDates)
+            IconButton(
+              icon: Icon(
+                _calendarViewActive
+                    ? Icons.view_list_rounded
+                    : Icons.calendar_month_rounded,
+              ),
+              tooltip: _calendarViewActive ? 'List View' : 'Month View',
+              onPressed: () =>
+                  setState(() => _calendarViewActive = !_calendarViewActive),
+            ),
+          const _FilterButton(),
+          const SizedBox(width: 8),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(110),
@@ -317,7 +340,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
           ),
         ),
       ),
-      floatingActionButton: showAllDates
+      floatingActionButton: showAllDates && !_calendarViewActive
           ? FloatingActionButton.small(
               onPressed: _scrollToToday,
               tooltip: 'Go to today',
@@ -349,6 +372,420 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
           Expanded(child: bodyContent),
         ],
       ),
+    );
+  }
+
+  // ── Monthly Calendar view ─────────────────────────────────────────────────
+  Widget _buildCalendarView(
+    BuildContext context,
+    List<TaskModel> tasks,
+    List<BirthdayEntry> birthdays,
+    List<GlobalEvent> apiHolidays,
+  ) {
+    const monthNames = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    const dayNames = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    final primary = Theme.of(context).colorScheme.primary;
+    final now = DateTime.now();
+    final today = DateUtils.dateOnly(now);
+    final firstOfMonth = _calendarMonth;
+    final daysInMonth =
+        DateTime(firstOfMonth.year, firstOfMonth.month + 1, 0).day;
+    final startWeekday = firstOfMonth.weekday; // 1=Mon
+    final totalRows = ((daysInMonth + startWeekday - 1) / 7).ceil();
+
+    // Selected day data
+    final selectedDay = _selectedCalendarDate;
+    final isDayToday =
+        selectedDay != null && DateUtils.isSameDay(selectedDay, today);
+    final dayTasks = selectedDay != null
+        ? tasks.where((t) => t.occursOnDate(selectedDay)).toList()
+        : <TaskModel>[];
+    final events = selectedDay != null
+        ? getEventsForDate(selectedDay, extra: apiHolidays)
+        : <GlobalEvent>[];
+    final dayBirthdays = selectedDay != null
+        ? birthdays
+            .where(
+                (b) => b.month == selectedDay.month && b.day == selectedDay.day)
+            .toList()
+        : <BirthdayEntry>[];
+
+    // Build selected day content items for sliver list
+    final List<Widget> selectedItems = [];
+    if (selectedDay == null) {
+      selectedItems.add(
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: Center(child: Text('Tap a date to see tasks')),
+        ),
+      );
+    } else {
+      selectedItems.addAll(events.map((ev) => _GlobalEventCard(event: ev)));
+      selectedItems
+          .addAll(dayBirthdays.map((b) => _BirthdayMiniCard(entry: b)));
+      if (dayTasks.isEmpty && events.isEmpty && dayBirthdays.isEmpty) {
+        selectedItems.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 24),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.event_available_rounded,
+                  size: 44,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.2),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'No tasks on this day',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.4),
+                      ),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else {
+        for (final task in dayTasks) {
+          selectedItems.add(
+            SwipeableCard(
+              task: task,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => TaskDetailScreen(task: task)),
+              ),
+              onEdit: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => AddTaskScreen(editTask: task)),
+              ),
+              onComplete: () =>
+                  ref.read(taskListProvider.notifier).markComplete(task.id),
+              onDelete: () =>
+                  ref.read(taskListProvider.notifier).deleteTask(task.id),
+            ),
+          );
+        }
+      }
+    }
+
+    // Use CustomScrollView so the entire calendar + tasks section is scrollable,
+    // preventing overflow on months with 6 rows or on small screens.
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Month navigation header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left_rounded),
+                      onPressed: () => setState(() {
+                        _calendarMonth = DateTime(
+                            _calendarMonth.year, _calendarMonth.month - 1);
+                      }),
+                    ),
+                    Expanded(
+                      child: Text(
+                        '${monthNames[_calendarMonth.month - 1]} ${_calendarMonth.year}',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right_rounded),
+                      onPressed: () => setState(() {
+                        _calendarMonth = DateTime(
+                            _calendarMonth.year, _calendarMonth.month + 1);
+                      }),
+                    ),
+                    TextButton(
+                      onPressed: () => setState(() {
+                        _calendarMonth = DateTime(now.year, now.month);
+                        _selectedCalendarDate = today;
+                      }),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      child: Text(
+                        'Today',
+                        style: TextStyle(
+                          color: primary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Day-of-week header row
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  children: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
+                      .map((d) => Expanded(
+                            child: Center(
+                              child: Text(
+                                d,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.5),
+                                    ),
+                              ),
+                            ),
+                          ))
+                      .toList(),
+                ),
+              ),
+              const SizedBox(height: 4),
+              // Calendar grid
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(totalRows, (row) {
+                    return Row(
+                      children: List.generate(7, (col) {
+                        final cellIndex = row * 7 + col;
+                        final dayNum = cellIndex - (startWeekday - 1) + 1;
+                        if (dayNum < 1 || dayNum > daysInMonth) {
+                          return const Expanded(child: SizedBox(height: 52));
+                        }
+                        final cellDate = DateTime(
+                            firstOfMonth.year, firstOfMonth.month, dayNum);
+                        final isCellToday =
+                            DateUtils.isSameDay(cellDate, today);
+                        final isSelected = _selectedCalendarDate != null &&
+                            DateUtils.isSameDay(
+                                cellDate, _selectedCalendarDate!);
+                        final cellTasks = tasks
+                            .where((t) => t.occursOnDate(cellDate))
+                            .toList();
+                        final hasSpecial =
+                            getEventsForDate(cellDate, extra: apiHolidays)
+                                    .isNotEmpty ||
+                                birthdays.any((b) =>
+                                    b.month == cellDate.month &&
+                                    b.day == cellDate.day);
+
+                        return Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(
+                                () => _selectedCalendarDate = cellDate),
+                            child: Container(
+                              height: 52,
+                              margin: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? primary.withValues(alpha: 0.12)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                                border: isSelected
+                                    ? Border.all(color: primary, width: 1.5)
+                                    : null,
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      color: isCellToday
+                                          ? primary
+                                          : Colors.transparent,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      dayNum.toString(),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13,
+                                        color: isCellToday
+                                            ? Colors.white
+                                            : Theme.of(context)
+                                                .colorScheme
+                                                .onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      if (hasSpecial)
+                                        Container(
+                                          width: 5,
+                                          height: 5,
+                                          margin: const EdgeInsets.symmetric(
+                                              horizontal: 1),
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFFFF6B9D),
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ...cellTasks.take(3).map(
+                                            (t) => Container(
+                                              width: 5,
+                                              height: 5,
+                                              margin:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 1),
+                                              decoration: BoxDecoration(
+                                                color: t.colorTag,
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                          ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    );
+                  }),
+                ),
+              ),
+              Divider(
+                height: 12,
+                thickness: 1,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.08),
+              ),
+              // Selected day header
+              if (selectedDay != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: isDayToday
+                              ? primary
+                              : primary.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          selectedDay.day.toString(),
+                          style: TextStyle(
+                            color: isDayToday ? Colors.white : primary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              dayNames[selectedDay.weekday - 1],
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleSmall
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: isDayToday ? primary : null,
+                                  ),
+                            ),
+                            Text(
+                              '${monthNames[selectedDay.month - 1]} ${selectedDay.year}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.5),
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (dayTasks.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '${dayTasks.length} task${dayTasks.length == 1 ? '' : 's'}',
+                            style: TextStyle(
+                              color: primary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        // Selected day task/event items — always scrollable
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate(selectedItems),
+          ),
+        ),
+      ],
     );
   }
 
