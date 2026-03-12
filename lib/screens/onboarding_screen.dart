@@ -102,7 +102,64 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
       ],
     ),
 
-    // ── Page 4: Statistics & Insights ────────────────────────────────────────
+    // ── Page 4: Pomodoro Timer ────────────────────────────────────────────────
+    _PageData(
+      // Unsplash: person focused at desk / deep work
+      imageUrl: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173'
+          '?auto=format&fit=crop&w=800&q=80',
+      categoryLabel: 'Pomodoro Timer',
+      categoryIcon: Icons.timer_rounded,
+      categoryColor: Color(0xFFEF4444),
+      title: 'Focus Deep,\nRest Well',
+      description:
+          'Use the Pomodoro technique to stay in the zone. Work in timed '
+          'bursts, then recharge — so you can do more without burning out.',
+      bullets: [
+        'Custom work & break duration settings',
+        'Session history with daily focus totals',
+        'Start a session instantly from the home screen',
+      ],
+    ),
+
+    // ── Page 5: Habit Tracker ─────────────────────────────────────────────────
+    _PageData(
+      // Unsplash: person running / building a routine
+      imageUrl: 'https://images.unsplash.com/photo-1549060279-7e168fcee0c2'
+          '?auto=format&fit=crop&w=800&q=80',
+      categoryLabel: 'Habit Tracker',
+      categoryIcon: Icons.repeat_rounded,
+      categoryColor: Color(0xFF0EA5E9),
+      title: 'Build Habits\nThat Stick',
+      description:
+          'Define daily or weekly habits, track streaks, and visualise '
+          'your consistency over time with a 30-day heatmap.',
+      bullets: [
+        'Daily, weekly & custom frequency goals',
+        'Streak counter & 30-day completion heatmap',
+        'Color-coded categories for a quick overview',
+      ],
+    ),
+
+    // ── Page 6: Notes ─────────────────────────────────────────────────────────
+    _PageData(
+      // Unsplash: open notebook on desk
+      imageUrl: 'https://images.unsplash.com/photo-1517842645767-c639042777db'
+          '?auto=format&fit=crop&w=800&q=80',
+      categoryLabel: 'Notes',
+      categoryIcon: Icons.sticky_note_2_rounded,
+      categoryColor: Color(0xFF14B8A6),
+      title: 'Capture Ideas\nAnywhere',
+      description:
+          'Jot down thoughts in organised folders and set smart reminders '
+          'so important notes always surface at the right moment.',
+      bullets: [
+        'Folder-based organisation for any topic',
+        'Reminders: one-time, interval or day-of-month',
+        'Auto-save as you type — never lose a word',
+      ],
+    ),
+
+    // ── Page 7: Statistics & Insights ────────────────────────────────────────
     _PageData(
       // Unsplash: analytics / data charts
       imageUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71'
@@ -113,7 +170,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
       title: 'Measure What\nMatters',
       description:
           'Understand your productivity with beautiful charts. Track completion '
-          'rates, build habits, and hit personal records.',
+          'rates, habit consistency, and hit personal records.',
       bullets: [
         'Weekly, monthly & yearly performance reports',
         'Completion rate trends & category breakdowns',
@@ -121,7 +178,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
       ],
     ),
 
-    // ── Page 5: Get Started (special layout) ─────────────────────────────────
+    // ── Page 8: Get Started (special layout) ─────────────────────────────────
     _PageData(
       // Unsplash: golden sunrise / new beginning
       imageUrl: 'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8'
@@ -435,7 +492,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
               ],
             ),
           ),
-          const SizedBox(height: 14),
+          const Spacer(flex: 1),
 
           // Title
           _animated(
@@ -450,7 +507,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
               ),
             ),
           ),
-          const SizedBox(height: 14),
+          const Spacer(flex: 1),
 
           // Description
           _animated(
@@ -464,7 +521,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          const Spacer(flex: 2),
 
           // Feature recap chips
           _animated(
@@ -480,10 +537,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
                 _featureChip(
                     Icons.music_note_rounded, 'Music', const Color(0xFF7C3AED)),
                 _featureChip(
+                    Icons.timer_rounded, 'Pomodoro', const Color(0xFFEF4444)),
+                _featureChip(
+                    Icons.repeat_rounded, 'Habits', const Color(0xFF0EA5E9)),
+                _featureChip(Icons.sticky_note_2_rounded, 'Notes',
+                    const Color(0xFF14B8A6)),
+                _featureChip(
                     Icons.bar_chart_rounded, 'Stats', const Color(0xFFF59E0B)),
               ],
             ),
           ),
+          const Spacer(flex: 1),
         ],
       ),
     );
