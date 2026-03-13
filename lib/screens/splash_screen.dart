@@ -94,30 +94,39 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // ── Background image (office discussion/meeting from Unsplash, Unsplash License) ──
+            // ── Background gradient (always visible — instant, no network needed) ──
             FadeTransition(
               opacity:
                   CurvedAnimation(parent: _bgController, curve: Curves.easeIn),
-              child: Image.network(
-                'https://images.unsplash.com/photo-1552664730-d307ca884978'
-                '?auto=format&fit=crop&w=800&q=80',
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFF1E40AF),
-                        Color(0xFF0F172A),
-                        Color(0xFF0D0221),
-                        Color(0xFF0D0221),
-                      ],
-                      stops: [0.0, 0.35, 0.7, 1.0],
-                    ),
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF1E40AF),
+                      Color(0xFF0F172A),
+                      Color(0xFF0D0221),
+                      Color(0xFF0D0221),
+                    ],
+                    stops: [0.0, 0.35, 0.7, 1.0],
                   ),
                 ),
               ),
+            ),
+
+            // ── Background photo from Unsplash (fades in only when loaded) ──
+            // Uses loadingBuilder so the gradient above stays visible while
+            // the image is still downloading (e.g. on a fresh release install).
+            // errorBuilder catches network failures gracefully.
+            // Both cases fall back to the gradient → splash always looks good.
+            Image.network(
+              'https://images.unsplash.com/photo-1552664730-d307ca884978'
+              '?auto=format&fit=crop&w=800&q=80',
+              fit: BoxFit.cover,
+              loadingBuilder: (_, child, progress) =>
+                  progress == null ? child : const SizedBox.expand(),
+              errorBuilder: (_, __, ___) => const SizedBox.expand(),
             ),
 
             // ── Gradient overlay (darkens bottom for readability) ──

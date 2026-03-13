@@ -341,14 +341,40 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
         ),
       ),
       floatingActionButton: showAllDates && !_calendarViewActive
-          ? FloatingActionButton.small(
-              onPressed: _scrollToToday,
-              tooltip: 'Go to today',
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              child: const Icon(
-                Icons.today_rounded,
-                color: Colors.white,
-                size: 20,
+          ? Padding(
+              padding: EdgeInsets.only(
+                bottom: 72 + MediaQuery.of(context).padding.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FloatingActionButton.small(
+                    heroTag: 'fab_add_task',
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AddTaskScreen()),
+                    ),
+                    tooltip: 'Add task',
+                    backgroundColor: Theme.of(context).colorScheme.secondary,
+                    child: const Icon(
+                      Icons.add_task_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  FloatingActionButton.small(
+                    heroTag: 'fab_today',
+                    onPressed: _scrollToToday,
+                    tooltip: 'Go to today',
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    child: const Icon(
+                      Icons.today_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ],
               ),
             )
           : null,

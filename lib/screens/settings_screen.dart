@@ -52,7 +52,7 @@ class SettingsScreen extends ConsumerWidget {
           _buildCard(context, card, [
             _settingRowNav(context,
                 icon: Icons.code_rounded,
-                label: 'Informasi Developer',
+                label: 'Informasi Developer & Feedback',
                 onTap: () => _showDeveloperModal(context, isDark, card)),
           ]),
           const SizedBox(height: 20),
