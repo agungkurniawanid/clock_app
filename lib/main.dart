@@ -22,14 +22,10 @@ import 'screens/notes_screen.dart';
 import 'screens/note_file_editor_screen.dart';
 import 'models/task_model.dart';
 
-/// Global [NavigatorKey] used by [NotificationService] to push AlarmScreen
-/// from notification taps (works even when app is backgrounded).
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Edge-to-edge transparent system bars
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
@@ -37,11 +33,8 @@ void main() async {
     systemNavigationBarDividerColor: Colors.transparent,
   ));
 
-  // Restore persisted onboarding state
   final prefs = await SharedPreferences.getInstance();
   final onboardingDone = prefs.getBool('onboarding_done') ?? false;
-
-  // Restore persisted settings
   final savedTheme = await StorageService.loadThemeMode();
   final savedMusic = await StorageService.loadDefaultMusic();
   final savedVolume = await StorageService.loadDefaultVolume();
@@ -56,7 +49,6 @@ void main() async {
       await StorageService.loadBirthdayBadgeDismissed();
   final savedFontScaleIndex = await StorageService.loadFontScaleIndex();
 
-  // Apply settings to NotificationService static fields
   NotificationService.vibrationEnabled = savedVib;
   NotificationService.dndEnabled = savedDnd;
   NotificationService.defaultAlarmMusic = savedMusic;
@@ -65,7 +57,6 @@ void main() async {
   NotificationService.defaultNotifVolume = savedNotifVolume / 100.0;
   NotificationService.defaultReminder = savedRemind;
 
-  // Init notification service (channels only — permissions requested after runApp)
   await NotificationService.init();
 
   runApp(
