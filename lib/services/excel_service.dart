@@ -59,15 +59,16 @@ class ExcelService {
   static Future<void> exportTasks(List<TaskModel> tasks) async {
     final excel = Excel.createExcel();
 
-    // Create our named sheet and remove the default 'Sheet1'
-    excel[_sheetName]; // creates 'Tasks' sheet
-    for (final key in excel.sheets.keys.toList()) {
-      if (key != _sheetName) excel.delete(key);
+    // Get the default sheet and rename it to our target name
+    final defaultSheet = excel.getDefaultSheet() ?? 'Sheet1';
+    if (defaultSheet != _sheetName) {
+      excel.rename(defaultSheet, _sheetName);
     }
+    excel.setDefaultSheet(_sheetName);
     final sheet = excel[_sheetName];
 
-    // Header row
-    sheet.appendRow(_headers.map((h) => TextCellValue(h)).toList());
+    sheet.appendRow(
+        _headers.map((h) => TextCellValue(h) as CellValue?).toList());
 
     // Style header cells bold
     for (int i = 0; i < _headers.length; i++) {
@@ -145,8 +146,8 @@ class ExcelService {
       if (id.isEmpty && _str(row, 1).isEmpty) continue; // blank row
       try {
         tasks.add(_rowToTask(row));
-      } catch (_) {
-        // Skip rows that cannot be parsed
+      } catch (e) {
+        debugPrint('Error parsing Excel row $i: $e');
       }
     }
     return tasks;
@@ -327,7 +328,20 @@ class ExcelService {
 
   static String _str(List<Data?> row, int index) {
     if (index >= row.length) return '';
-    return row[index]?.value?.toString().trim() ?? '';
+    final cell = row[index];
+    if (cell == null || cell.value == null) return '';
+
+    final value = cell.value;
+    if (value is TextCellValue) {
+      return value.value.toString().trim();
+    } else if (value is IntCellValue) {
+      return value.value.toString();
+    } else if (value is DoubleCellValue) {
+      return value.value.toString();
+    } else if (value is BoolCellValue) {
+      return value.value.toString();
+    }
+    return value.toString().trim();
   }
 
   static int _int(List<Data?> row, int index) {
